@@ -1,151 +1,153 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/Modul-306/backend/auth"
 	"github.com/gorilla/mux"
 )
 
-type Credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+type BaseHandler struct {
+	w        http.ResponseWriter
+	r        *http.Request
+	id       string
+	username string
+}
+
+func newBaseHandler(w http.ResponseWriter, r *http.Request) BaseHandler {
+	vars := mux.Vars(r)
+	return BaseHandler{
+		w:        w,
+		r:        r,
+		id:       vars["id"],
+		username: auth.GetUsername(r),
+	}
+}
+
+// Handler type definition
+type HandlerFunc func(BaseHandler)
+
+// Middleware to create BaseHandler
+func withBaseHandler(handler HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h := newBaseHandler(w, r)
+		handler(h)
+	}
+}
+
+// Combined middleware for auth and BaseHandler
+func withAuthAndBase(handler HandlerFunc) http.HandlerFunc {
+	return auth.IsAuthorized(withBaseHandler(handler))
 }
 
 func main() {
 	router := mux.NewRouter()
 
+	// Public list endpoints
+	router.HandleFunc("/blogs", withBaseHandler(GetBlogs)).Methods("GET")
+	router.HandleFunc("/products", withBaseHandler(GetProducts)).Methods("GET")
+
+	// Protected list endpoints
+	router.HandleFunc("/blogs", withAuthAndBase(CreateBlog)).Methods("POST")
+	router.HandleFunc("/user", withAuthAndBase(GetUsers)).Methods("GET")
+	router.HandleFunc("/products", withAuthAndBase(CreateProduct)).Methods("POST")
+	router.HandleFunc("/order", withAuthAndBase(GetOrders)).Methods("GET")
+	router.HandleFunc("/order", withAuthAndBase(CreateOrder)).Methods("POST")
+
 	// Public endpoints
-	router.HandleFunc("/auth/login", Login).Methods("POST")
-	router.HandleFunc("/auth/sign-up", SignUp).Methods("POST")
-	router.HandleFunc("/blogs", GetBlogs).Methods("GET")
-	router.HandleFunc("/blogs/{id}", GetBlog).Methods("GET")
-	router.HandleFunc("/products", GetProducts).Methods("GET")
-	router.HandleFunc("/products/{id}", GetProduct).Methods("GET")
+	router.HandleFunc("/auth/login", auth.Login).Methods("POST")
+	router.HandleFunc("/auth/sign-up", auth.SignUp).Methods("POST")
+	router.HandleFunc("/blogs/{id}", withBaseHandler(GetBlog)).Methods("GET")
+	router.HandleFunc("/products/{id}", withBaseHandler(GetProduct)).Methods("GET")
 
 	// Protected endpoints
-	router.HandleFunc("/blogs", auth.IsAuthorized(CreateBlog)).Methods("POST")
-	router.HandleFunc("/blogs/{id}", auth.IsAuthorized(DeleteBlog)).Methods("DELETE")
-	router.HandleFunc("/blogs/{id}", auth.IsAuthorized(UpdateBlog)).Methods("UPDATE")
-	router.HandleFunc("/user", auth.IsAuthorized(GetUsers)).Methods("GET")
-	router.HandleFunc("/user/{id}", auth.IsAuthorized(GetUser)).Methods("GET")
-	router.HandleFunc("/user/{id}", auth.IsAuthorized(DeleteUser)).Methods("DELETE")
-	router.HandleFunc("/products", auth.IsAuthorized(CreateProduct)).Methods("POST")
-	router.HandleFunc("/products/{id}", auth.IsAuthorized(DeleteProduct)).Methods("DELETE")
-	router.HandleFunc("/products/{id}", auth.IsAuthorized(UpdateProduct)).Methods("UPDATE")
-	router.HandleFunc("/order", auth.IsAuthorized(GetOrders)).Methods("GET")
-	router.HandleFunc("/order", auth.IsAuthorized(CreateOrder)).Methods("POST")
-	router.HandleFunc("/order/{id}", auth.IsAuthorized(GetOrder)).Methods("GET")
-	router.HandleFunc("/order/{id}", auth.IsAuthorized(DeleteOrder)).Methods("DELETE")
-	router.HandleFunc("/order/{id}", auth.IsAuthorized(UpdateOrder)).Methods("UPDATE")
+	router.HandleFunc("/blogs/{id}", withAuthAndBase(DeleteBlog)).Methods("DELETE")
+	router.HandleFunc("/blogs/{id}", withAuthAndBase(UpdateBlog)).Methods("UPDATE")
+	router.HandleFunc("/user/{id}", withAuthAndBase(GetUser)).Methods("GET")
+	router.HandleFunc("/user/{id}", withAuthAndBase(DeleteUser)).Methods("DELETE")
+	router.HandleFunc("/products/{id}", withAuthAndBase(DeleteProduct)).Methods("DELETE")
+	router.HandleFunc("/products/{id}", withAuthAndBase(UpdateProduct)).Methods("UPDATE")
+	router.HandleFunc("/order/{id}", withAuthAndBase(GetOrder)).Methods("GET")
+	router.HandleFunc("/order/{id}", withAuthAndBase(DeleteOrder)).Methods("DELETE")
+	router.HandleFunc("/order/{id}", withAuthAndBase(UpdateOrder)).Methods("UPDATE")
 
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
-func Login(w http.ResponseWriter, r *http.Request) {
-	var creds Credentials
-	err := json.NewDecoder(r.Body).Decode(&creds)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Authenticate the user
-	if creds.Username != "user" || creds.Password != "password" {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	expirationTime := time.Now().Add(5 * time.Minute)
-
-	tokenString, err := auth.CreateToken(creds.Username, expirationTime)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "token",
-		Value:   tokenString,
-		Expires: expirationTime,
-	})
+// List endpoints
+func GetBlogs(h BaseHandler) {
+	// Implementation for getting all blogs
 }
 
-func SignUp(w http.ResponseWriter, r *http.Request) {
-	// Implement sign-up logic
+func CreateBlog(h BaseHandler) {
+	// Implementation for creating a blog
 }
 
-func GetBlogs(w http.ResponseWriter, r *http.Request) {
-	// Implement get blogs logic
+func GetProducts(h BaseHandler) {
+	// Implementation for getting all products
 }
 
-func CreateBlog(w http.ResponseWriter, r *http.Request) {
-	// Implement create blog logic
+func CreateProduct(h BaseHandler) {
+	// Implementation for creating a product
 }
 
-func GetBlog(w http.ResponseWriter, r *http.Request) {
-	// Implement get blog logic
+func GetUsers(h BaseHandler) {
+	// Implementation for getting all users
 }
 
-func DeleteBlog(w http.ResponseWriter, r *http.Request) {
-	// Implement delete blog logic
+func GetOrders(h BaseHandler) {
+	// Implementation for getting all orders
 }
 
-func UpdateBlog(w http.ResponseWriter, r *http.Request) {
-	// Implement update blog logic
+func CreateOrder(h BaseHandler) {
+	// Implementation for creating an order
 }
 
-func GetUsers(w http.ResponseWriter, r *http.Request) {
-	// Implement get users logic
+// Blog handlers
+func GetBlog(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func GetUser(w http.ResponseWriter, r *http.Request) {
-	// Implement get user logic
+func UpdateBlog(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	// Implement delete user logic
+func DeleteBlog(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func GetProducts(w http.ResponseWriter, r *http.Request) {
-	// Implement get products logic
+// User handlers
+func GetUser(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func CreateProduct(w http.ResponseWriter, r *http.Request) {
-	// Implement create product logic
+func DeleteUser(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func GetProduct(w http.ResponseWriter, r *http.Request) {
-	// Implement get product logic
+// Product handlers
+func GetProduct(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	// Implement delete product logic
+func DeleteProduct(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	// Implement update product logic
+func UpdateProduct(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func GetOrders(w http.ResponseWriter, r *http.Request) {
-	// Implement get orders logic
+// Order handlers
+func GetOrder(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func CreateOrder(w http.ResponseWriter, r *http.Request) {
-	// Implement create order logic
+func DeleteOrder(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }
 
-func GetOrder(w http.ResponseWriter, r *http.Request) {
-	// Implement get order logic
-}
-
-func DeleteOrder(w http.ResponseWriter, r *http.Request) {
-	// Implement delete order logic
-}
-
-func UpdateOrder(w http.ResponseWriter, r *http.Request) {
-	// Implement update order logic
+func UpdateOrder(h BaseHandler) {
+	// Use h.id, h.w, h.r
 }

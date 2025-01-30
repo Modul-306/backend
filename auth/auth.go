@@ -14,6 +14,26 @@ type Claims struct {
 
 var jwtKey = []byte("my_secret_key")
 
+func GetUsername(r *http.Request) string {
+	c, err := r.Cookie("token")
+	if err != nil {
+		return ""
+	}
+
+	tknStr := c.Value
+	claims := &Claims{}
+
+	_, err = jwt.ParseWithClaims(tknStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		return ""
+	}
+
+	return claims.Username
+}
+
 func CreateToken(username string, expirationTime time.Time) (string, error) {
 	claims := &Claims{
 		Username: username,
