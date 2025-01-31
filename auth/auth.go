@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Claims struct {
@@ -13,6 +14,18 @@ type Claims struct {
 }
 
 var jwtKey = []byte("my_secret_key")
+
+// HashPassword generates a bcrypt hash for the given password.
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+// VerifyPassword verifies if the given password matches the stored hash.
+func VerifyPassword(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
 
 func GetUsername(r *http.Request) string {
 	c, err := r.Cookie("token")
