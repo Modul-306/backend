@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/Modul-306/backend/db"
-	"github.com/jackc/pgx/v5"
 )
 
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -20,7 +18,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authenticate the user
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	conn, err := db.CreateDBConnection()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -64,7 +62,7 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authenticate the user
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	conn, err := db.CreateDBConnection()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
