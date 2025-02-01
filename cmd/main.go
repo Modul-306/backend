@@ -33,6 +33,7 @@ func CreateRouter() *mux.Router {
 	router.HandleFunc("/user", handlers.WithAuthAndBase(handlers.GetUsers)).Methods("GET")
 	router.HandleFunc("/user/{id}", handlers.WithAuthAndBase(handlers.GetUser)).Methods("GET")
 	router.HandleFunc("/user/{id}", handlers.WithAuthAndBase(handlers.DeleteUser)).Methods("DELETE")
+	router.HandleFunc("/user/{id}", handlers.WithAuthAndBase(handlers.UpdateUser)).Methods("UPDATE")
 
 	// Product endpoints
 	router.HandleFunc("/products", handlers.WithBaseHandler(handlers.GetProducts)).Methods("GET")

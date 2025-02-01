@@ -11,14 +11,14 @@ WHERE name = $1 LIMIT 1;
 SELECT * FROM users;
 
 -- name: CreateUser :one
-INSERT INTO users (name, password, email)
-VALUES ($1, $2, $3)
+INSERT INTO users (name, password, email, is_admin)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateUser :one
 UPDATE users
-SET name = $1, password = $2, email = $3
-WHERE id = $4
+SET name = $1, password = $2, email = $3, is_admin = $4
+WHERE id = $5
 RETURNING *;
 
 -- name: DeleteUser :one
@@ -35,14 +35,18 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM blogs;
 
 -- name: CreateBlog :one
-INSERT INTO blogs (title, content, user_id)
-VALUES ($1, $2, $3)
+INSERT INTO blogs (title, content, user_id, path)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateBlog :one
 UPDATE blogs
-SET title = $1, content = $2, user_id = $3
-WHERE id = $4
+SET title = $1, 
+    content = $2, 
+    user_id = $3,
+    path = $4,
+    modified_at = CURRENT_TIMESTAMP
+WHERE id = $5
 RETURNING *;
 
 -- name: DeleteBlog :one
@@ -59,14 +63,17 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM products;
 
 -- name: CreateProduct :one
-INSERT INTO products (name, price, image_url)
-VALUES ($1, $2, $3)
+INSERT INTO products (name, price, image_url, is_available)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateProduct :one
 UPDATE products
-SET name = $1, price = $2, image_url = $3
-WHERE id = $4
+SET name = $1, 
+    price = $2, 
+    image_url = $3,
+    is_available = $4
+WHERE id = $5
 RETURNING *;
 
 -- name: DeleteProduct :one
@@ -83,14 +90,16 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM orders;
 
 -- name: CreateOrder :one
-INSERT INTO orders (address, user_id)
-VALUES ($1, $2)
+INSERT INTO orders (address, user_id, is_completed)
+VALUES ($1, $2, false)
 RETURNING *;
 
 -- name: UpdateOrder :one
 UPDATE orders
-SET address = $1, user_id = $2
-WHERE id = $3
+SET address = $1, 
+    user_id = $2,
+    is_completed = $3
+WHERE id = $4
 RETURNING *;
 
 -- name: DeleteOrder :one

@@ -12,34 +12,42 @@ import (
 )
 
 const createBlog = `-- name: CreateBlog :one
-INSERT INTO blogs (title, content, user_id)
-VALUES ($1, $2, $3)
-RETURNING id, title, content, user_id, created_at
+INSERT INTO blogs (title, content, user_id, path)
+VALUES ($1, $2, $3, $4)
+RETURNING id, title, content, user_id, path, modified_at, created_at
 `
 
 type CreateBlogParams struct {
 	Title   string
 	Content string
 	UserID  int32
+	Path    string
 }
 
 func (q *Queries) CreateBlog(ctx context.Context, arg CreateBlogParams) (Blog, error) {
-	row := q.db.QueryRow(ctx, createBlog, arg.Title, arg.Content, arg.UserID)
+	row := q.db.QueryRow(ctx, createBlog,
+		arg.Title,
+		arg.Content,
+		arg.UserID,
+		arg.Path,
+	)
 	var i Blog
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.Content,
 		&i.UserID,
+		&i.Path,
+		&i.ModifiedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const createOrder = `-- name: CreateOrder :one
-INSERT INTO orders (address, user_id)
-VALUES ($1, $2)
-RETURNING id, address, user_id, created_at
+INSERT INTO orders (address, user_id, is_completed)
+VALUES ($1, $2, false)
+RETURNING id, address, user_id, is_completed, created_at
 `
 
 type CreateOrderParams struct {
@@ -54,6 +62,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.ID,
 		&i.Address,
 		&i.UserID,
+		&i.IsCompleted,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -85,50 +94,64 @@ func (q *Queries) CreateOrderProduct(ctx context.Context, arg CreateOrderProduct
 }
 
 const createProduct = `-- name: CreateProduct :one
-INSERT INTO products (name, price, image_url)
-VALUES ($1, $2, $3)
-RETURNING id, name, price, image_url, created_at
+INSERT INTO products (name, price, image_url, is_available)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name, price, image_url, is_available, created_at
 `
 
 type CreateProductParams struct {
-	Name     string
-	Price    pgtype.Numeric
-	ImageUrl string
+	Name        string
+	Price       pgtype.Numeric
+	ImageUrl    string
+	IsAvailable pgtype.Bool
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
-	row := q.db.QueryRow(ctx, createProduct, arg.Name, arg.Price, arg.ImageUrl)
+	row := q.db.QueryRow(ctx, createProduct,
+		arg.Name,
+		arg.Price,
+		arg.ImageUrl,
+		arg.IsAvailable,
+	)
 	var i Product
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Price,
 		&i.ImageUrl,
+		&i.IsAvailable,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, password, email)
-VALUES ($1, $2, $3)
-RETURNING id, name, password, email, created_at
+INSERT INTO users (name, password, email, is_admin)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name, password, email, is_admin, created_at
 `
 
 type CreateUserParams struct {
 	Name     string
 	Password string
 	Email    string
+	IsAdmin  pgtype.Bool
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Password, arg.Email)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Name,
+		arg.Password,
+		arg.Email,
+		arg.IsAdmin,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Password,
 		&i.Email,
+		&i.IsAdmin,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -137,7 +160,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 const deleteBlog = `-- name: DeleteBlog :one
 DELETE FROM blogs
 WHERE id = $1
-RETURNING id, title, content, user_id, created_at
+RETURNING id, title, content, user_id, path, modified_at, created_at
 `
 
 func (q *Queries) DeleteBlog(ctx context.Context, id int32) (Blog, error) {
@@ -148,6 +171,8 @@ func (q *Queries) DeleteBlog(ctx context.Context, id int32) (Blog, error) {
 		&i.Title,
 		&i.Content,
 		&i.UserID,
+		&i.Path,
+		&i.ModifiedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -156,7 +181,7 @@ func (q *Queries) DeleteBlog(ctx context.Context, id int32) (Blog, error) {
 const deleteOrder = `-- name: DeleteOrder :one
 DELETE FROM orders
 WHERE id = $1
-RETURNING id, address, user_id, created_at
+RETURNING id, address, user_id, is_completed, created_at
 `
 
 func (q *Queries) DeleteOrder(ctx context.Context, id int32) (Order, error) {
@@ -166,6 +191,7 @@ func (q *Queries) DeleteOrder(ctx context.Context, id int32) (Order, error) {
 		&i.ID,
 		&i.Address,
 		&i.UserID,
+		&i.IsCompleted,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -193,7 +219,7 @@ func (q *Queries) DeleteOrderProduct(ctx context.Context, id int32) (OrderProduc
 const deleteProduct = `-- name: DeleteProduct :one
 DELETE FROM products
 WHERE id = $1
-RETURNING id, name, price, image_url, created_at
+RETURNING id, name, price, image_url, is_available, created_at
 `
 
 func (q *Queries) DeleteProduct(ctx context.Context, id int32) (Product, error) {
@@ -204,6 +230,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, id int32) (Product, error) 
 		&i.Name,
 		&i.Price,
 		&i.ImageUrl,
+		&i.IsAvailable,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -212,7 +239,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, id int32) (Product, error) 
 const deleteUser = `-- name: DeleteUser :one
 DELETE FROM users
 WHERE id = $1
-RETURNING id, name, password, email, created_at
+RETURNING id, name, password, email, is_admin, created_at
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id int32) (User, error) {
@@ -223,13 +250,14 @@ func (q *Queries) DeleteUser(ctx context.Context, id int32) (User, error) {
 		&i.Name,
 		&i.Password,
 		&i.Email,
+		&i.IsAdmin,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getBlog = `-- name: GetBlog :one
-SELECT id, title, content, user_id, created_at FROM blogs
+SELECT id, title, content, user_id, path, modified_at, created_at FROM blogs
 WHERE id = $1 LIMIT 1
 `
 
@@ -242,13 +270,15 @@ func (q *Queries) GetBlog(ctx context.Context, id int32) (Blog, error) {
 		&i.Title,
 		&i.Content,
 		&i.UserID,
+		&i.Path,
+		&i.ModifiedAt,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getBlogs = `-- name: GetBlogs :many
-SELECT id, title, content, user_id, created_at FROM blogs
+SELECT id, title, content, user_id, path, modified_at, created_at FROM blogs
 `
 
 func (q *Queries) GetBlogs(ctx context.Context) ([]Blog, error) {
@@ -265,6 +295,8 @@ func (q *Queries) GetBlogs(ctx context.Context) ([]Blog, error) {
 			&i.Title,
 			&i.Content,
 			&i.UserID,
+			&i.Path,
+			&i.ModifiedAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -278,7 +310,7 @@ func (q *Queries) GetBlogs(ctx context.Context) ([]Blog, error) {
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, address, user_id, created_at FROM orders
+SELECT id, address, user_id, is_completed, created_at FROM orders
 WHERE id = $1 LIMIT 1
 `
 
@@ -290,6 +322,7 @@ func (q *Queries) GetOrder(ctx context.Context, id int32) (Order, error) {
 		&i.ID,
 		&i.Address,
 		&i.UserID,
+		&i.IsCompleted,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -345,7 +378,7 @@ func (q *Queries) GetOrderProducts(ctx context.Context) ([]OrderProduct, error) 
 }
 
 const getOrders = `-- name: GetOrders :many
-SELECT id, address, user_id, created_at FROM orders
+SELECT id, address, user_id, is_completed, created_at FROM orders
 `
 
 func (q *Queries) GetOrders(ctx context.Context) ([]Order, error) {
@@ -361,6 +394,7 @@ func (q *Queries) GetOrders(ctx context.Context) ([]Order, error) {
 			&i.ID,
 			&i.Address,
 			&i.UserID,
+			&i.IsCompleted,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -374,7 +408,7 @@ func (q *Queries) GetOrders(ctx context.Context) ([]Order, error) {
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, name, price, image_url, created_at FROM products
+SELECT id, name, price, image_url, is_available, created_at FROM products
 WHERE id = $1 LIMIT 1
 `
 
@@ -387,13 +421,14 @@ func (q *Queries) GetProduct(ctx context.Context, id int32) (Product, error) {
 		&i.Name,
 		&i.Price,
 		&i.ImageUrl,
+		&i.IsAvailable,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getProducts = `-- name: GetProducts :many
-SELECT id, name, price, image_url, created_at FROM products
+SELECT id, name, price, image_url, is_available, created_at FROM products
 `
 
 func (q *Queries) GetProducts(ctx context.Context) ([]Product, error) {
@@ -410,6 +445,7 @@ func (q *Queries) GetProducts(ctx context.Context) ([]Product, error) {
 			&i.Name,
 			&i.Price,
 			&i.ImageUrl,
+			&i.IsAvailable,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -423,7 +459,7 @@ func (q *Queries) GetProducts(ctx context.Context) ([]Product, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, password, email, created_at FROM users
+SELECT id, name, password, email, is_admin, created_at FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -436,13 +472,14 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 		&i.Name,
 		&i.Password,
 		&i.Email,
+		&i.IsAdmin,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, name, password, email, created_at FROM users
+SELECT id, name, password, email, is_admin, created_at FROM users
 WHERE name = $1 LIMIT 1
 `
 
@@ -454,13 +491,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, name string) (User, err
 		&i.Name,
 		&i.Password,
 		&i.Email,
+		&i.IsAdmin,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, name, password, email, created_at FROM users
+SELECT id, name, password, email, is_admin, created_at FROM users
 `
 
 func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
@@ -477,6 +515,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 			&i.Name,
 			&i.Password,
 			&i.Email,
+			&i.IsAdmin,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -491,15 +530,20 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 
 const updateBlog = `-- name: UpdateBlog :one
 UPDATE blogs
-SET title = $1, content = $2, user_id = $3
-WHERE id = $4
-RETURNING id, title, content, user_id, created_at
+SET title = $1, 
+    content = $2, 
+    user_id = $3,
+    path = $4,
+    modified_at = CURRENT_TIMESTAMP
+WHERE id = $5
+RETURNING id, title, content, user_id, path, modified_at, created_at
 `
 
 type UpdateBlogParams struct {
 	Title   string
 	Content string
 	UserID  int32
+	Path    string
 	ID      int32
 }
 
@@ -508,6 +552,7 @@ func (q *Queries) UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, e
 		arg.Title,
 		arg.Content,
 		arg.UserID,
+		arg.Path,
 		arg.ID,
 	)
 	var i Blog
@@ -516,6 +561,8 @@ func (q *Queries) UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, e
 		&i.Title,
 		&i.Content,
 		&i.UserID,
+		&i.Path,
+		&i.ModifiedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -523,24 +570,33 @@ func (q *Queries) UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, e
 
 const updateOrder = `-- name: UpdateOrder :one
 UPDATE orders
-SET address = $1, user_id = $2
-WHERE id = $3
-RETURNING id, address, user_id, created_at
+SET address = $1, 
+    user_id = $2,
+    is_completed = $3
+WHERE id = $4
+RETURNING id, address, user_id, is_completed, created_at
 `
 
 type UpdateOrderParams struct {
-	Address string
-	UserID  int32
-	ID      int32
+	Address     string
+	UserID      int32
+	IsCompleted pgtype.Bool
+	ID          int32
 }
 
 func (q *Queries) UpdateOrder(ctx context.Context, arg UpdateOrderParams) (Order, error) {
-	row := q.db.QueryRow(ctx, updateOrder, arg.Address, arg.UserID, arg.ID)
+	row := q.db.QueryRow(ctx, updateOrder,
+		arg.Address,
+		arg.UserID,
+		arg.IsCompleted,
+		arg.ID,
+	)
 	var i Order
 	err := row.Scan(
 		&i.ID,
 		&i.Address,
 		&i.UserID,
+		&i.IsCompleted,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -580,16 +636,20 @@ func (q *Queries) UpdateOrderProduct(ctx context.Context, arg UpdateOrderProduct
 
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE products
-SET name = $1, price = $2, image_url = $3
-WHERE id = $4
-RETURNING id, name, price, image_url, created_at
+SET name = $1, 
+    price = $2, 
+    image_url = $3,
+    is_available = $4
+WHERE id = $5
+RETURNING id, name, price, image_url, is_available, created_at
 `
 
 type UpdateProductParams struct {
-	Name     string
-	Price    pgtype.Numeric
-	ImageUrl string
-	ID       int32
+	Name        string
+	Price       pgtype.Numeric
+	ImageUrl    string
+	IsAvailable pgtype.Bool
+	ID          int32
 }
 
 func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {
@@ -597,6 +657,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		arg.Name,
 		arg.Price,
 		arg.ImageUrl,
+		arg.IsAvailable,
 		arg.ID,
 	)
 	var i Product
@@ -605,6 +666,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.Name,
 		&i.Price,
 		&i.ImageUrl,
+		&i.IsAvailable,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -612,15 +674,16 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
-SET name = $1, password = $2, email = $3
-WHERE id = $4
-RETURNING id, name, password, email, created_at
+SET name = $1, password = $2, email = $3, is_admin = $4
+WHERE id = $5
+RETURNING id, name, password, email, is_admin, created_at
 `
 
 type UpdateUserParams struct {
 	Name     string
 	Password string
 	Email    string
+	IsAdmin  pgtype.Bool
 	ID       int32
 }
 
@@ -629,6 +692,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Name,
 		arg.Password,
 		arg.Email,
+		arg.IsAdmin,
 		arg.ID,
 	)
 	var i User
@@ -637,6 +701,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Name,
 		&i.Password,
 		&i.Email,
+		&i.IsAdmin,
 		&i.CreatedAt,
 	)
 	return i, err

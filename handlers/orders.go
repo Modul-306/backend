@@ -6,16 +6,19 @@ import (
 	"strconv"
 
 	"github.com/Modul-306/backend/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type OrderRequest struct {
-	Address string `json:"address"`
+	Address     string `json:"address"`
+	IsCompleted bool   `json:"is_completed"`
 }
 
 type OrderResponse struct {
-	ID      int    `json:"id"`
-	Address string `json:"address"`
-	UserID  int    `json:"user_id"`
+	ID          int    `json:"id"`
+	Address     string `json:"address"`
+	UserID      int    `json:"user_id"`
+	IsCompleted bool   `json:"is_completed"`
 }
 
 func GetOrders(h BaseHandler) {
@@ -121,10 +124,18 @@ func UpdateOrder(h BaseHandler) {
 		return
 	}
 
+	isCompleted := pgtype.Bool{}
+	err = isCompleted.Scan(req.IsCompleted)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	order, err := dbConn.UpdateOrder(h.r.Context(), db.UpdateOrderParams{
-		ID:      int32(id),
-		Address: req.Address,
-		UserID:  user.ID,
+		ID:          int32(id),
+		Address:     req.Address,
+		UserID:      user.ID,
+		IsCompleted: isCompleted,
 	})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)

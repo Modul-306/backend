@@ -82,6 +82,7 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 		Password: hashedPassword,
 		Email:    creds.Email,
 	})
+
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

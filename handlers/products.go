@@ -10,16 +10,18 @@ import (
 )
 
 type ProductRequest struct {
-	Name     string  `json:"name"`
-	Price    float64 `json:"price"`
-	ImageURL string  `json:"image_url"`
+	Name        string  `json:"name"`
+	Price       float64 `json:"price"`
+	ImageURL    string  `json:"image_url"`
+	IsAvailable bool    `json:"is_available"`
 }
 
 type ProductResponse struct {
-	ID       int     `json:"id"`
-	Name     string  `json:"name"`
-	Price    float64 `json:"price"`
-	ImageURL string  `json:"image_url"`
+	ID          int     `json:"id"`
+	Name        string  `json:"name"`
+	Price       float64 `json:"price"`
+	ImageURL    string  `json:"image_url"`
+	IsAvailable bool    `json:"is_available"`
 }
 
 func GetProducts(h BaseHandler) {
@@ -83,10 +85,18 @@ func CreateProduct(h BaseHandler) {
 		return
 	}
 
+	isAvailable := pgtype.Bool{}
+	err = isAvailable.Scan(req.IsAvailable)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	product, err := db.New(conn).CreateProduct(h.r.Context(), db.CreateProductParams{
-		Name:     req.Name,
-		Price:    price,
-		ImageUrl: req.ImageURL,
+		Name:        req.Name,
+		Price:       price,
+		ImageUrl:    req.ImageURL,
+		IsAvailable: isAvailable,
 	})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
@@ -124,11 +134,19 @@ func UpdateProduct(h BaseHandler) {
 		return
 	}
 
+	isAvailable := pgtype.Bool{}
+	err = isAvailable.Scan(req.IsAvailable)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	product, err := db.New(conn).UpdateProduct(h.r.Context(), db.UpdateProductParams{
-		ID:       int32(id),
-		Name:     req.Name,
-		Price:    price,
-		ImageUrl: req.ImageURL,
+		ID:          int32(id),
+		Name:        req.Name,
+		Price:       price,
+		ImageUrl:    req.ImageURL,
+		IsAvailable: isAvailable,
 	})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)

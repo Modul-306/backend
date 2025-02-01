@@ -9,18 +9,21 @@ import (
 )
 
 type Blog struct {
-	ID        int32
-	Title     string
-	Content   string
-	UserID    int32
-	CreatedAt pgtype.Timestamp
+	ID         int32
+	Title      string
+	Content    string
+	UserID     int32
+	Path       string
+	ModifiedAt pgtype.Timestamp
+	CreatedAt  pgtype.Timestamp
 }
 
 type Order struct {
-	ID        int32
-	Address   string
-	UserID    int32
-	CreatedAt pgtype.Timestamp
+	ID          int32
+	Address     string
+	UserID      int32
+	IsCompleted pgtype.Bool
+	CreatedAt   pgtype.Timestamp
 }
 
 type OrderProduct struct {
@@ -32,11 +35,12 @@ type OrderProduct struct {
 }
 
 type Product struct {
-	ID        int32
-	Name      string
-	Price     pgtype.Numeric
-	ImageUrl  string
-	CreatedAt pgtype.Timestamp
+	ID          int32
+	Name        string
+	Price       pgtype.Numeric
+	ImageUrl    string
+	IsAvailable pgtype.Bool
+	CreatedAt   pgtype.Timestamp
 }
 
 type User struct {
@@ -44,5 +48,6 @@ type User struct {
 	Name      string
 	Password  string
 	Email     string
+	IsAdmin   pgtype.Bool
 	CreatedAt pgtype.Timestamp
 }

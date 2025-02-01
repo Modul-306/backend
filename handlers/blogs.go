@@ -11,6 +11,7 @@ import (
 type BlogRequest struct {
 	Title   string `json:"title"`
 	Content string `json:"content"`
+	Path    string `json:"path"`
 }
 
 type BlogResponse struct {
@@ -18,6 +19,7 @@ type BlogResponse struct {
 	Title   string `json:"title"`
 	Content string `json:"content"`
 	UserID  int    `json:"user_id"`
+	Path    string `json:"path"`
 }
 
 func GetBlogs(h BaseHandler) {
@@ -86,6 +88,7 @@ func CreateBlog(h BaseHandler) {
 		Title:   req.Title,
 		Content: req.Content,
 		UserID:  user.ID,
+		Path:    req.Path,
 	})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
@@ -129,6 +132,7 @@ func UpdateBlog(h BaseHandler) {
 		Title:   req.Title,
 		Content: req.Content,
 		UserID:  user.ID,
+		Path:    req.Path,
 	})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
