@@ -9,11 +9,30 @@ import (
 )
 
 func getConnString() (string, error) {
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
+	host, isSet := os.LookupEnv("DB_HOST")
+	if !isSet {
+		fmt.Println("DB_HOST is empty")
+	}
+
+	port, isSet := os.LookupEnv("DB_PORT")
+	if !isSet {
+		fmt.Println("DB_PORT is empty")
+	}
+
+	user, isSet := os.LookupEnv("DB_USER")
+	if !isSet {
+		fmt.Println("DB_USER is empty")
+	}
+
+	password, isSet := os.LookupEnv("DB_PASSWORD")
+	if !isSet {
+		fmt.Println("DB_PASSWORD is empty")
+	}
+
+	dbname, isSet := os.LookupEnv("DB_NAME")
+	if !isSet {
+		fmt.Println("DB_NAME is empty")
+	}
 
 	if host == "" || port == "" || user == "" || password == "" || dbname == "" {
 		return "", fmt.Errorf("missing environment variables")
