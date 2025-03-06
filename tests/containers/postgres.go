@@ -21,11 +21,15 @@ func NewTestPostgres(t *testing.T) (*TestContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Image:        "postgres:14-alpine",
 		ExposedPorts: []string{"5432/tcp"},
-		WaitingFor:   wait.ForListeningPort("5432/tcp"),
+		WaitingFor: wait.ForAll(
+			wait.ForLog("database system is ready to accept connections"),
+			wait.ForListeningPort("5432/tcp"),
+		),
 		Env: map[string]string{
-			"POSTGRES_DB":       "testdb",
-			"POSTGRES_USER":     "test",
-			"POSTGRES_PASSWORD": "test",
+			"POSTGRES_DB":               "testdb",
+			"POSTGRES_USER":             "test",
+			"POSTGRES_PASSWORD":         "test",
+			"POSTGRES_HOST_AUTH_METHOD": "trust",
 		},
 	}
 
@@ -49,6 +53,11 @@ func NewTestPostgres(t *testing.T) (*TestContainer, error) {
 	os.Setenv("DB_USER", "test")
 	os.Setenv("DB_PASSWORD", "test")
 	os.Setenv("DB_NAME", "testdb")
+
+	// Wait for container to be ready
+	if err := container.Start(ctx); err != nil {
+		return nil, fmt.Errorf("failed to start container: %v", err)
+	}
 
 	return &TestContainer{
 		Container: container,
