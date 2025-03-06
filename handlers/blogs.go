@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -77,8 +78,13 @@ func CreateBlog(h BaseHandler) {
 	}
 
 	dbConn := db.New(conn)
+	users, err := dbConn.GetUsers(h.r.Context())
+	fmt.Println(users)
 
+	fmt.Println(h.username)
 	user, err := dbConn.GetUserByUsername(h.r.Context(), h.username)
+	fmt.Println(user)
+	fmt.Println(err)
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return

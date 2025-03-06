@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -78,8 +79,8 @@ func CreateProduct(h BaseHandler) {
 		return
 	}
 
-	price := pgtype.Numeric{}
-	err = price.Scan(req.Price)
+	var price pgtype.Numeric
+	err = price.Scan(fmt.Sprintf("%.2f", req.Price))
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusBadRequest)
 		return
@@ -127,8 +128,8 @@ func UpdateProduct(h BaseHandler) {
 		return
 	}
 
-	price := pgtype.Numeric{}
-	err = price.Scan(req.Price)
+	var price pgtype.Numeric
+	err = price.Scan(fmt.Sprintf("%.2f", req.Price))
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusBadRequest)
 		return
