@@ -92,8 +92,15 @@ func CreateOrder(h BaseHandler) {
 		return
 	}
 
+	response := OrderResponse{
+		ID:          int(order.ID),
+		Address:     order.Address,
+		UserID:      int(order.UserID),
+		IsCompleted: order.IsCompleted.Bool,
+	}
+
 	h.w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(h.w).Encode(order)
+	json.NewEncoder(h.w).Encode(response)
 }
 
 func UpdateOrder(h BaseHandler) {
@@ -124,7 +131,7 @@ func UpdateOrder(h BaseHandler) {
 		return
 	}
 
-	isCompleted := pgtype.Bool{}
+	var isCompleted pgtype.Bool
 	err = isCompleted.Scan(req.IsCompleted)
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusBadRequest)
@@ -141,8 +148,15 @@ func UpdateOrder(h BaseHandler) {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	response := OrderResponse{
+		ID:          int(order.ID),
+		Address:     order.Address,
+		UserID:      int(order.UserID),
+		IsCompleted: order.IsCompleted.Bool,
+	}
 
-	json.NewEncoder(h.w).Encode(order)
+	h.w.WriteHeader(http.StatusOK)
+	json.NewEncoder(h.w).Encode(response)
 }
 
 func DeleteOrder(h BaseHandler) {

@@ -69,14 +69,13 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close(context.Background())
 
-	dbConn := db.New(conn)
-
 	hashedPassword, err := HashPassword(creds.Password)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	dbConn := db.New(conn)
 	_, err = dbConn.CreateUser(context.Background(), db.CreateUserParams{
 		Name:     creds.Username,
 		Password: hashedPassword,
@@ -84,23 +83,24 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
-
-	w.WriteHeader(http.StatusCreated)
 
 	expirationTime := time.Now().Add(5 * time.Minute)
 
-	jwt, err := CreateToken(creds.Username, expirationTime)
+	tokenString, err := CreateToken(creds.Username, expirationTime)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
 
+	// Set cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:    "token",
-		Value:   jwt,
+		Value:   tokenString,
 		Expires: expirationTime,
 	})
+
+	w.WriteHeader(http.StatusCreated)
 }

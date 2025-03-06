@@ -43,7 +43,6 @@ func GetUsername(r *http.Request) string {
 	if err != nil {
 		return ""
 	}
-
 	return claims.Username
 }
 
