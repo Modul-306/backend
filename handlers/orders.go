@@ -29,7 +29,15 @@ func GetOrders(h BaseHandler) {
 	}
 	defer conn.Close(h.r.Context())
 
-	orders, err := db.New(conn).GetOrders(h.r.Context())
+	orderDB := db.New(conn)
+
+	user, err := orderDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	orders, err := orderDB.GetOrders(h.r.Context(), user.ID)
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return
@@ -52,7 +60,15 @@ func GetOrder(h BaseHandler) {
 		return
 	}
 
-	order, err := db.New(conn).GetOrder(h.r.Context(), int32(id))
+	orderDB := db.New(conn)
+
+	user, err := orderDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	order, err := orderDB.GetOrder(h.r.Context(), db.GetOrderParams{ID: int32(id), UserID: user.ID})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusNotFound)
 		return
@@ -173,7 +189,15 @@ func DeleteOrder(h BaseHandler) {
 		return
 	}
 
-	order, err := db.New(conn).DeleteOrder(h.r.Context(), int32(id))
+	orderDB := db.New(conn)
+
+	user, err := orderDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	order, err := orderDB.DeleteOrder(h.r.Context(), db.DeleteOrderParams{ID: int32(id), UserID: user.ID})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return

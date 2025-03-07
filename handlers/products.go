@@ -171,7 +171,15 @@ func DeleteProduct(h BaseHandler) {
 		return
 	}
 
-	product, err := db.New(conn).DeleteProduct(h.r.Context(), int32(id))
+	productsDB := db.New(conn)
+
+	user, err := productsDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	product, err := productsDB.DeleteProduct(h.r.Context(), db.DeleteProductParams{ID: int32(id), Column2: user.ID})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return

@@ -77,7 +77,15 @@ func DeleteUser(h BaseHandler) {
 		return
 	}
 
-	user, err := db.New(conn).DeleteUser(h.r.Context(), int32(id))
+	userDB := db.New(conn)
+
+	reqUser, err := userDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	user, err := userDB.DeleteUser(h.r.Context(), db.DeleteUserParams{ID: int32(id), Column2: reqUser.ID})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return

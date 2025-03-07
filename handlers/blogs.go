@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -78,13 +77,7 @@ func CreateBlog(h BaseHandler) {
 	}
 
 	dbConn := db.New(conn)
-	users, err := dbConn.GetUsers(h.r.Context())
-	fmt.Println(users)
-
-	fmt.Println(h.username)
 	user, err := dbConn.GetUserByUsername(h.r.Context(), h.username)
-	fmt.Println(user)
-	fmt.Println(err)
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return
@@ -162,7 +155,15 @@ func DeleteBlog(h BaseHandler) {
 		return
 	}
 
-	blog, err := db.New(conn).DeleteBlog(h.r.Context(), int32(id))
+	blogDB := db.New(conn)
+
+	user, err := blogDB.GetUserByUsername(h.r.Context(), h.username)
+	if err != nil {
+		http.Error(h.w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	blog, err := blogDB.DeleteBlog(h.r.Context(), db.DeleteBlogParams{ID: int32(id), Column2: user.ID})
 	if err != nil {
 		http.Error(h.w, err.Error(), http.StatusInternalServerError)
 		return
