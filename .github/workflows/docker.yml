@@ -1,0 +1,55 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [ main, 'feature/*' ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Generate Docker tags
+        id: docker-tags
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          
+          # Feature branch or main - use staging repo
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+            ECR_REPOSITORY=my-app-staging
+            
+            if [[ $GITHUB_REF == refs/heads/feature/* ]]; then
+              BRANCH_NAME=${GITHUB_REF#refs/heads/feature/}
+              echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:feature-${BRANCH_NAME}" >> $GITHUB_OUTPUT
+            elif [[ $GITHUB_REF == refs/heads/main ]]; then
+              echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:main" >> $GITHUB_OUTPUT
+            fi
+          
+          # Release tag - use production repo
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
+            ECR_REPOSITORY=my-app
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${VERSION},${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.docker-tags.outputs.tags }}
