@@ -1,3 +1,4 @@
+
 # Backend API Service
 
 A Go-based REST API service that provides endpoints for managing users, blogs, products, and orders. Built with PostgreSQL for data persistence and JWT for authentication.
@@ -5,124 +6,119 @@ A Go-based REST API service that provides endpoints for managing users, blogs, p
 ## 🛠 Tech Stack
 
 - **Language**: Go 1.23
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL 14
+- **Testing**: 
+  - Testcontainers for PostgreSQL
+  - Integration tests
+  - Unit tests
 - **Libraries**:
   - `github.com/gorilla/mux` - HTTP router
   - `github.com/jackc/pgx/v5` - PostgreSQL driver
   - `github.com/golang-jwt/jwt` - JWT authentication
-  - `golang.org/x/crypto` - Password hashing
-
-## 📦 Project Structure
-
-```
-.
-├── auth/           # Authentication related code
-├── cmd/            # Application entrypoint
-├── db/            # Database models and queries
-├── handlers/      # HTTP request handlers
-└── sql/          # SQL schema and queries
-```
-
-## 🗄 Database Schema
-
-| Table | Description |
-|-------|-------------|
-| users | User accounts with authentication details |
-| blogs | Blog posts created by users |
-| products | Available products in the system |
-| orders | User orders with delivery information |
-| order_products | Many-to-many relationship between orders and products |
-
-## 🔑 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/api/v1/auth/login` | User login | No |
-| POST | `/api/v1/auth/sign-up` | User registration | No |
-
-### Users
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/v1/user` | List all users | Yes |
-| GET | `/api/v1/user/{id}` | Get user details | Yes |
-| UPDATE | `/api/v1/user/{id}` | Update user | Yes |
-| DELETE | `/api/v1/user/{id}` | Delete user | Yes |
-
-### Blogs
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/v1/blogs` | List all blogs | No |
-| GET | `/api/v1/blogs/{id}` | Get blog details | No |
-| POST | `/api/v1/blogs` | Create new blog | Yes |
-| UPDATE | `/api/v1/blogs/{id}` | Update blog | Yes |
-| DELETE | `/api/v1/blogs/{id}` | Delete blog | Yes |
-
-### Products
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/v1/products` | List all products | No |
-| GET | `/api/v1/products/{id}` | Get product details | No |
-| POST | `/api/v1/products` | Create new product | Yes |
-| UPDATE | `/api/v1/products/{id}` | Update product | Yes |
-| DELETE | `/api/v1/products/{id}` | Delete product | Yes |
-
-### Orders
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/v1/order` | List all orders | Yes |
-| GET | `/api/v1/order/{id}` | Get order details | Yes |
-| POST | `/api/v1/order` | Create new order | Yes |
-| UPDATE | `/api/v1/order/{id}` | Update order | Yes |
-| DELETE | `/api/v1/order/{id}` | Delete order | Yes |
+  - `github.com/testcontainers/testcontainers-go` - Container testing
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Go 1.23+
-- PostgreSQL
-- Docker (optional)
+- Docker
+- Make (optional)
 
-### Environment Variables
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=testdb
-```
+### Setup
 
-### Running the Application
-
-1. Clone the repository
-2. Set up the database:
+1. Clone the repository:
 ```bash
-./test.sh  # This will set up a test database with sample data
+git clone https://github.com/Modul-306/backend.git
+cd backend
 ```
 
-3. Run the application:
+2. Install dependencies:
 ```bash
-go build -o main ./cmd/main.go
-./main
+go mod download
 ```
 
-The server will start on port 8000.
-
-## 🧪 Testing
-
-The repository includes a test script (`test.sh`) that:
-- Sets up a PostgreSQL container
-- Creates the database schema
-- Inserts test data
-- Runs the application
-- Performs a test request
-
-Run tests with:
+3. Set environment variables:
 ```bash
-./test.sh
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_USER=postgres
+export DB_PASSWORD=postgres
+export DB_NAME=testdb
 ```
+
+### Development
+
+Run the application:
+```bash
+go run cmd/main.go
+```
+
+### Testing
+
+The project uses testcontainers for integration testing:
+
+```bash
+# Run all tests
+go test -v ./...
+
+# Run specific package tests
+go test -v ./handlers
+go test -v ./auth
+```
+
+Test features:
+- Automated PostgreSQL container setup
+- Schema initialization
+- Test data seeding
+- Cleanup after tests
+
+### Project Structure
+```
+.
+├── auth/           # Authentication
+├── cmd/            # Application entrypoint
+├── db/            # Database layer
+├── handlers/      # HTTP handlers
+├── sql/          # SQL schemas and queries
+└── tests/        # Test utilities
+    ├── containers/  # Test container setup
+    └── testhelpers/ # Test helper functions
+```
+
+## 🧪 Testing Architecture
+
+Tests are organized in multiple layers:
+
+1. **Unit Tests**
+   - Individual package functionality
+   - No external dependencies
+
+2. **Integration Tests**
+   - Database operations
+   - API endpoints
+   - Uses testcontainers
+
+3. **Test Helpers**
+   - Database setup/cleanup
+   - Test data generation
+   - Container management
+
+## 📝 Development Workflow
+
+1. Write tests first
+2. Implement features
+3. Run test suite
+4. Review code coverage
+5. Submit PR
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Add tests
+4. Implement changes
+5. Submit pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the 
-LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
