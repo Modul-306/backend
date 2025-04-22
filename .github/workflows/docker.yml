@@ -18,20 +18,22 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-central-1
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Generate Docker tags
         id: docker-tags
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          STAGING_REPO=${{ vars.STAGING_REPO }}
+          PRODUCTION_REPO=${{ vars.PRODUCTION_REPO }}
           
           # Feature branch or main - use staging repo
           if [[ $GITHUB_REF == refs/heads/* ]]; then
-            ECR_REPOSITORY=my-app-staging
+            ECR_REPOSITORY=$STAGING_REPO
             
             if [[ $GITHUB_REF == refs/heads/feature/* ]]; then
               BRANCH_NAME=${GITHUB_REF#refs/heads/feature/}
@@ -42,7 +44,7 @@ jobs:
           
           # Release tag - use production repo
           elif [[ $GITHUB_REF == refs/tags/v* ]]; then
-            ECR_REPOSITORY=my-app
+            ECR_REPOSITORY=$PRODUCTION_REPO
             VERSION=${GITHUB_REF#refs/tags/v}
             echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${VERSION},${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" >> $GITHUB_OUTPUT
           fi
