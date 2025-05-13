@@ -1,0 +1,70 @@
+name: Push Helm Chart to ECR
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+    paths:
+      - 'chart/**'
+  pull_request:
+    paths:
+      - 'chart/**'
+
+jobs:
+  push-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Package Helm chart
+        run: |
+          helm package ./chart
+
+      - name: Push Helm chart to ECR
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          
+          # Get chart version from Chart.yaml
+          CHART_VERSION=$(grep 'version:' ./chart/Chart.yaml | awk '{print $2}')
+          
+          # Login to ECR
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} | \
+          helm registry login -u AWS --password-stdin $ECR_REGISTRY
+          
+          # Determine target repository and tag based on trigger
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            # Push to production for version tags
+            HELM_REPO=${{ vars.HELM_PROD_REPO }}
+            TAG=${GITHUB_REF#refs/tags/v}
+            CHART_VERSION=$TAG
+          else
+            # Push to staging for PRs and main branch
+            HELM_REPO=${{ vars.HELM_STAGING_REPO }}
+            if [[ ${{ github.event_name }} == 'pull_request' ]]; then
+              TAG="pr-${{ github.event.number }}"
+            else
+              TAG="main"
+              HELM_REPO=${{ vars.HELM_STAGING_REPO }}
+            fi
+          fi
+          
+          # Push to appropriate repository
+          helm push backend-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}/${HELM_REPO}
+          echo "Chart pushed to ${HELM_REPO} with version ${CHART_VERSION}"
