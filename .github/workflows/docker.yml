@@ -1,0 +1,70 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [ main, 'feature/*' ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate Docker tags
+        id: docker-tags
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          STAGING_REPO=${{ vars.STAGING_REPO }}
+          PRODUCTION_REPO=${{ vars.PRODUCTION_REPO }}
+          
+          # Feature branch or main - use staging repo
+          if [[ $GITHUB_REF == refs/heads/* ]]; then
+            ECR_REPOSITORY=$STAGING_REPO
+            
+            if [[ $GITHUB_REF == refs/heads/feature/* ]]; then
+              BRANCH_NAME=${GITHUB_REF#refs/heads/feature/}
+              echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:feature-${BRANCH_NAME}" >> $GITHUB_OUTPUT
+            elif [[ $GITHUB_REF == refs/heads/main ]]; then
+              echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:main" >> $GITHUB_OUTPUT
+            fi
+          
+          # Release tag - use production repo
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
+            ECR_REPOSITORY=$PRODUCTION_REPO
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${VERSION},${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" >> $GITHUB_OUTPUT
+          
+          # Pull requests - use staging repo with PR number
+          elif [[ $GITHUB_REF == refs/pull/* ]]; then
+            ECR_REPOSITORY=$STAGING_REPO
+            PR_NUMBER=$(echo $GITHUB_REF | cut -d '/' -f 3)
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:pr-${PR_NUMBER}" >> $GITHUB_OUTPUT
+          
+          # Default tag if nothing matches
+          else
+            ECR_REPOSITORY=$STAGING_REPO
+            SHA=${GITHUB_SHA::7}
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:sha-${SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.docker-tags.outputs.tags }}
