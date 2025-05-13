@@ -48,6 +48,18 @@ jobs:
             ECR_REPOSITORY=$PRODUCTION_REPO
             VERSION=${GITHUB_REF#refs/tags/v}
             echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:${VERSION},${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" >> $GITHUB_OUTPUT
+          
+          # Pull requests - use staging repo with PR number
+          elif [[ $GITHUB_REF == refs/pull/* ]]; then
+            ECR_REPOSITORY=$STAGING_REPO
+            PR_NUMBER=$(echo $GITHUB_REF | cut -d '/' -f 3)
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:pr-${PR_NUMBER}" >> $GITHUB_OUTPUT
+          
+          # Default tag if nothing matches
+          else
+            ECR_REPOSITORY=$STAGING_REPO
+            SHA=${GITHUB_SHA::7}
+            echo "tags=${ECR_REGISTRY}/${ECR_REPOSITORY}:sha-${SHA}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push Docker image
