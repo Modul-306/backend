@@ -66,5 +66,5 @@ jobs:
           fi
           
           # Push to appropriate repository
-          helm push backend-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}/${HELM_REPO}
+          helm push backend-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
           echo "Chart pushed to ${HELM_REPO} with version ${CHART_VERSION}"
