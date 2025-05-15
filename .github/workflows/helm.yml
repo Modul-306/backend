@@ -34,13 +34,16 @@ jobs:
           version: v3.12.0
 
       - name: Update Chart name
+        env:
+          HELM_STAGING_REPO: ${{ vars.HELM_STAGING_REPO }}
+          HELM_PROD_REPO: ${{ vars.HELM_PROD_REPO }}
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             # Use production name for version tags
-            sed -i "s/name:.*/name: ${vars.HELM_PROD_REPO}/" ./chart/Chart.yaml
+            sed -i "s/name:.*/name: $HELM_PROD_REPO/" ./chart/Chart.yaml
           else
             # Use staging name for PRs and main branch
-            sed -i "s/name:.*/name: ${vars.HELM_STAGING_REPO}/" ./chart/Chart.yaml
+            sed -i "s/name:.*/name: $HELM_STAGING_REPO/" ./chart/Chart.yaml
           fi
 
       - name: Package Helm chart
@@ -48,6 +51,9 @@ jobs:
           helm package ./chart
 
       - name: Push Helm chart to ECR
+        env:
+          HELM_STAGING_REPO: ${{ vars.HELM_STAGING_REPO }}
+          HELM_PROD_REPO: ${{ vars.HELM_PROD_REPO }}
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           
@@ -77,8 +83,8 @@ jobs:
           
           # Push to appropriate repository with correct chart name
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            helm push ${vars.HELM_PROD_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
+            helm push ${HELM_PROD_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
           else
-            helm push ${vars.HELM_STAGING_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
+            helm push ${HELM_STAGING_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
           fi
           echo "Chart pushed to ${HELM_REPO} with version ${CHART_VERSION}"
