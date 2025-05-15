@@ -75,6 +75,6 @@ jobs:
           helm registry login -u AWS --password-stdin $ECR_REGISTRY
           
           # Push to appropriate repository
-          helm push $PACKAGE_NAME oci://${ECR_REGISTRY}/${HELM_REPO}
+          helm push $PACKAGE_NAME oci://${ECR_REGISTRY}
           
           echo "Chart $PACKAGE_NAME pushed to ${HELM_REPO}"
