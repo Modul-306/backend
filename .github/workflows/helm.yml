@@ -53,11 +53,10 @@ jobs:
             sed -i "s/version:.*/version: $TAG/" ./chart/Chart.yaml
           else
             HELM_REPO=${{ vars.HELM_STAGING_REPO }}
-            if [[ ${{ github.event_name }} == 'pull_request' ]]; then
-              # Use latest version with PR suffix
-              TAG="${LATEST_VERSION}-pr.${github.event.number}"
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              PR_NUMBER=${{ github.event.number }}
+              TAG="${LATEST_VERSION}-pr${PR_NUMBER}"
             else
-              # Use latest version with main suffix
               TAG="${LATEST_VERSION}-main"
             fi
             # Update chart name and version for staging
