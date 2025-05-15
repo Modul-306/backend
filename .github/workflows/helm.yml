@@ -40,6 +40,10 @@ jobs:
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           
+          # Get latest version tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0")
+          LATEST_VERSION=${LATEST_TAG#v}
+          
           # Determine target repository and tag based on trigger
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             HELM_REPO=${{ vars.HELM_PROD_REPO }}
@@ -50,9 +54,11 @@ jobs:
           else
             HELM_REPO=${{ vars.HELM_STAGING_REPO }}
             if [[ ${{ github.event_name }} == 'pull_request' ]]; then
-              TAG="pr-${{ github.event.number }}"
+              # Use latest version with PR suffix
+              TAG="${LATEST_VERSION}-pr.${github.event.number}"
             else
-              TAG="main"
+              # Use latest version with main suffix
+              TAG="${LATEST_VERSION}-main"
             fi
             # Update chart name and version for staging
             sed -i "s/name:.*/name: ${HELM_STAGING_REPO#*/}/" ./chart/Chart.yaml
