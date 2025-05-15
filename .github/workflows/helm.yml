@@ -37,10 +37,10 @@ jobs:
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             # Use production name for version tags
-            sed -i "s/name:.*/name: ${HELM_PROD_REPO#*/}/" ./chart/Chart.yaml
+            sed -i "s/name:.*/name: ${vars.HELM_PROD_REPO}/" ./chart/Chart.yaml
           else
             # Use staging name for PRs and main branch
-            sed -i "s/name:.*/name: ${HELM_STAGING_REPO#*/}/" ./chart/Chart.yaml
+            sed -i "s/name:.*/name: ${vars.HELM_STAGING_REPO}/" ./chart/Chart.yaml
           fi
 
       - name: Package Helm chart
@@ -77,8 +77,8 @@ jobs:
           
           # Push to appropriate repository with correct chart name
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            helm push ${HELM_PROD_REPO#*/}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
+            helm push ${vars.HELM_PROD_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
           else
-            helm push ${HELM_STAGING_REPO#*/}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
+            helm push ${vars.HELM_STAGING_REPO}-${CHART_VERSION}.tgz oci://${ECR_REGISTRY}
           fi
           echo "Chart pushed to ${HELM_REPO} with version ${CHART_VERSION}"
