@@ -1,0 +1,80 @@
+name: Push Helm Chart to ECR
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+    paths:
+      - 'chart/**'
+  pull_request:
+    paths:
+      - 'chart/**'
+
+jobs:
+  push-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Package and Push Helm chart
+        env:
+          HELM_STAGING_REPO: ${{ vars.HELM_STAGING_REPO }}
+          HELM_PROD_REPO: ${{ vars.HELM_PROD_REPO }}
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          
+          # Get latest version tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0")
+          LATEST_VERSION=${LATEST_TAG#v}
+          
+          # Determine target repository and tag based on trigger
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            HELM_REPO=${{ vars.HELM_PROD_REPO }}
+            TAG=${GITHUB_REF#refs/tags/v}
+            # Update chart name and version for production
+            sed -i "s/name:.*/name: ${HELM_PROD_REPO#*/}/" ./chart/Chart.yaml
+            sed -i "s/version:.*/version: $TAG/" ./chart/Chart.yaml
+          else
+            HELM_REPO=${{ vars.HELM_STAGING_REPO }}
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              PR_NUMBER=${{ github.event.number }}
+              TAG="${LATEST_VERSION}-pr${PR_NUMBER}"
+            else
+              TAG="${LATEST_VERSION}-main"
+            fi
+            # Update chart name and version for staging
+            sed -i "s/name:.*/name: ${HELM_STAGING_REPO#*/}/" ./chart/Chart.yaml
+            sed -i "s/version:.*/version: $TAG/" ./chart/Chart.yaml
+          fi
+          
+          # Package chart
+          helm package ./chart
+          
+          # Get the actual package name
+          PACKAGE_NAME=$(ls *.tgz)
+          
+          # Login to ECR
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} | \
+          helm registry login -u AWS --password-stdin $ECR_REGISTRY
+          
+          # Push to appropriate repository
+          helm push $PACKAGE_NAME oci://${ECR_REGISTRY}
+          
+          echo "Chart $PACKAGE_NAME pushed to ${HELM_REPO}"
