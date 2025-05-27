@@ -33,3 +33,4 @@ env:
   DB_USER: "postgres"
   DB_PASSWORD: "password" # This should be set via secret
   
+imagePullSecrets: []
