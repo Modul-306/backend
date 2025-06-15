@@ -14,20 +14,26 @@ spec:
       labels:
         {{- include "backend.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.imagePullSecrets}}
+      imagePullSecrets:
+        {{- range .Values.imagePullSecrets }}
+        - name: {{ .name }}
+        {{- end }}
+      {{- end }}
       initContainers:
         - name: db-migration
           image: postgres:15
           env:
             - name: PGHOST
-              value: {{ .Values.env.DB_HOST }}
+              value: {{ .Values.env.DB_HOST | quote }}
             - name: PGPORT
-              value: {{ .Values.env.DB_PORT }}
+              value: {{ .Values.env.DB_PORT | quote }}
             - name: PGDATABASE
-              value: {{ .Values.env.DB_NAME }}
+              value: {{ .Values.env.DB_NAME | quote }}
             - name: PGUSER
-              value: {{ .Values.env.DB_USER }}
+              value: {{ .Values.env.DB_USER | quote }}
             - name: PGPASSWORD
-              value: {{ .Values.env.DB_PASSWORD }}
+              value: {{ .Values.env.DB_PASSWORD | quote }}
           command:
             - /bin/sh
             - -c
@@ -87,12 +93,6 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.imagePullSecrets}}
-          imagePullSecrets:
-            {{- range .Values.imagePullSecrets }}
-            - name: {{ .name }}
-            {{- end }}
-          {{- end }}
           ports:
             - containerPort: 8000
               protocol: TCP
