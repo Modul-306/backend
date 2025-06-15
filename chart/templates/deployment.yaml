@@ -86,8 +86,9 @@ spec:
               
               -- Insert admin user (password is 'admin123' hashed)
               INSERT INTO users (name, password, email, is_admin) 
-              VALUES ('admin', '$2a$14$example_hash_here', 'admin@test.com', true) 
+              VALUES ('admin', '$2a$14$wVsaPvJnJJsomkesD3NYL.soXkY/f/NJOB2D8GkF/GEL9LdbwLcXa', 'admin@test.com', true) 
               ON CONFLICT (name) DO NOTHING;
+              
               EOF
       containers:
         - name: {{ .Chart.Name }}
