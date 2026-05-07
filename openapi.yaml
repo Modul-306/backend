@@ -1,0 +1,114 @@
+openapi: 3.0.3
+info:
+  title: Cattlehof Shop API
+  description: Multi-tenant cattlehof shop and blogging API.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price: { type: number, format: float }
+        stock: { type: integer }
+        image_url: { type: string }
+
+    Blog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        title: { type: string }
+        content_md: { type: string }
+        published_at: { type: string, format: date-time }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, completed, cancelled] }
+        total_amount: { type: number, format: float }
+
+    OrderItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        quantity: { type: integer }
+        price_at_time: { type: number, format: float }
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                properties:
+                  token: { type: string }
+
+  /products:
+    get:
+      summary: List all products for the current tenant
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Product' }
+    post:
+      summary: Add a new product (Farmer Admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        201: { description: Created }
+
+  /blogs:
+    get:
+      summary: List all blogs for the current tenant
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Blog' }
+    post:
+      summary: Create a blog post (Farmer Admin only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        201: { description: Created }
+
+  /orders:
+    post:
+      summary: Place an order
+      security: [{ bearerAuth: [] }]
+      responses:
+        201: { description: Created }
