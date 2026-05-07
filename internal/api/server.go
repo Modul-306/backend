@@ -1,13 +1,8 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
-	"io"
-	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/M306/backend/internal/db/sqlc"
@@ -16,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -99,7 +95,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	arg := db.CreateUserParams{
-		TenantID:     db.UUID(req.TenantID),
+		TenantID:     uuid.MustParse(req.TenantID),
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Role:         req.Role,
