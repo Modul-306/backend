@@ -27,7 +27,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.VOYAGERA_GHRC_ACCESSTOKEN }}
 
       - name: Build and push Backend
         uses: docker/build-push-action@v6
