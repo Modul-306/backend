@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: voyagera-ch/test-backend/voyagera-backend
+  IMAGE_NAME: voyagera-ch/cattlehof-backend
 
 jobs:
   build-and-push:
