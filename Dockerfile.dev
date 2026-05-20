@@ -1,0 +1,10 @@
+FROM cosmtrek/air:latest AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+COPY vendor ./vendor
+COPY . .
+
+# Air will handle the build and run in dev mode
+CMD ["air", "-c", ".air.toml"]

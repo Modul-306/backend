@@ -1,7 +1,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -219,17 +221,35 @@ func (s *Server) handleListBlogs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAddProduct(w http.ResponseWriter, r *http.Request) {
 	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
-	var arg db.CreateProductParams
-	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	
+	var req struct {
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Price       float64 `json:"price"`
+		Stock       int32   `json:"stock"`
+		ImageUrl    string  `json:"image_url"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	arg.TenantID = tenant.ID
+
+	arg := db.CreateProductParams{
+		TenantID:    tenant.ID,
+		Name:        req.Name,
+		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Price:       fmt.Sprintf("%.2f", req.Price),
+		Stock:       req.Stock,
+		ImageUrl:    sql.NullString{String: req.ImageUrl, Valid: req.ImageUrl != ""},
+	}
+
 	product, err := s.db.CreateProduct(r.Context(), arg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(product)
 }
