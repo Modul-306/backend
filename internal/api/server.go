@@ -55,21 +55,37 @@ func (s *Server) Routes() http.Handler {
 	}))
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// --- Public Routes ---
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/register", s.handleRegister)
+		r.Get("/tenants", s.handleListTenants)
 		
+		r.Group(func(r chi.Router) {
+			r.Use(s.TenantMiddleware)
+			r.Get("/tenants/{slug}", s.handleGetTenant)
+			r.Get("/products", s.handleListProducts)
+			r.Get("/blogs", s.handleListBlogs)
+		})
+
+		// --- Authenticated Routes (Any Role) ---
 		r.Group(func(r chi.Router) {
 			r.Use(s.JWTMiddleware)
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/upload", s.handleUpload)
+			
+			r.Group(func(r chi.Router) {
+				r.Use(s.TenantMiddleware)
+				r.Post("/orders", s.handlePlaceOrder)
+				r.Get("/orders/my", s.handleListMyOrders)
+				r.Get("/orders/{id}", s.handleGetOrderDetails)
+			})
 		})
 
-		// Global Admin Routes
+		// --- Global Admin Routes ---
 		r.Group(func(r chi.Router) {
 			r.Use(s.JWTMiddleware)
 			r.Use(s.RequireRole("platform_admin"))
 			
-			r.Get("/tenants", s.handleListTenants)
 			r.Post("/tenants", s.handleCreateTenant)
 			r.Put("/tenants/{id}", s.handleUpdateTenant)
 			r.Put("/tenants/{id}/owner", s.handleSetTenantOwner)
@@ -77,37 +93,25 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/users", s.handleListUsers)
 		})
 
-		// Tenant-specific Routes
+		// --- Tenant Management Routes (Owner/Platform Admin only) ---
 		r.Group(func(r chi.Router) {
+			r.Use(s.JWTMiddleware)
 			r.Use(s.TenantMiddleware)
-
-			r.Get("/tenants/{slug}", s.handleGetTenant)
-			r.Get("/products", s.handleListProducts)
-			r.Get("/blogs", s.handleListBlogs)
-
-			// Protected Tenant Routes (Farmer Admin or Platform Admin)
+			r.Use(s.RequireTenantAccess) // Ensures user is owner or platform_admin
+			
+			r.Put("/tenants/icon", s.handleUpdateTenantIcon)
+			r.Put("/tenants/appearance", s.handleUpdateTenantAppearance)
+			r.Get("/orders", s.handleListOrders) // List all orders for this tenant
+			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
+			
 			r.Group(func(r chi.Router) {
-				r.Use(s.JWTMiddleware)
-				r.Use(s.RequireTenantAccess) // Ensures user belongs to this tenant or is platform_admin
-				
-				r.Put("/tenants/icon", s.handleUpdateTenantIcon)
-				r.Put("/tenants/appearance", s.handleUpdateTenantAppearance)
-				
-				r.Group(func(r chi.Router) {
-					r.Use(s.RequireRole("farmer_admin", "platform_admin"))
-					r.Post("/products", s.handleAddProduct)
-					r.Put("/products/{id}", s.handleUpdateProduct)
-					r.Delete("/products/{id}", s.handleDeleteProduct)
-					r.Post("/blogs", s.handleCreateBlog)
-					r.Put("/blogs/{id}", s.handleUpdateBlog)
-					r.Delete("/blogs/{id}", s.handleDeleteBlog)
-					r.Get("/orders", s.handleListOrders)
-					r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
-				})
-
-				r.Post("/orders", s.handlePlaceOrder)
-				r.Get("/orders/my", s.handleListMyOrders)
-				r.Get("/orders/{id}", s.handleGetOrderDetails)
+				r.Use(s.RequireRole("farmer_admin", "platform_admin"))
+				r.Post("/products", s.handleAddProduct)
+				r.Put("/products/{id}", s.handleUpdateProduct)
+				r.Delete("/products/{id}", s.handleDeleteProduct)
+				r.Post("/blogs", s.handleCreateBlog)
+				r.Put("/blogs/{id}", s.handleUpdateBlog)
+				r.Delete("/blogs/{id}", s.handleDeleteBlog)
 			})
 		})
 	})
