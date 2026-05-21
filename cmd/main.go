@@ -91,7 +91,7 @@ func main() {
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
-	server := api.NewServer(dbQueries, s3Storage, jwtSecret)
+	server := api.NewServer(dbQueries, conn, s3Storage, jwtSecret)
 
 	// Seed default tenant and admin user
 	ctx := context.Background()
