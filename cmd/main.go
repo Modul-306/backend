@@ -104,7 +104,7 @@ func main() {
 		})
 	}
 
-	_, err = dbQueries.GetUserByEmail(ctx, "admin@cattlehof.ch")
+	admin, err := dbQueries.GetUserByEmail(ctx, "admin@cattlehof.ch")
 	if err != nil {
 		log.Println("Seeding admin user...")
 		// password: admin
@@ -114,6 +114,12 @@ func main() {
 			Email:        "admin@cattlehof.ch",
 			PasswordHash: string(hash),
 			Role:         "platform_admin",
+		})
+	} else if admin.Role != "platform_admin" {
+		log.Println("Fixing admin user role...")
+		_, _ = dbQueries.UpdateUserRole(ctx, db.UpdateUserRoleParams{
+			ID:   admin.ID,
+			Role: "platform_admin",
 		})
 	}
 

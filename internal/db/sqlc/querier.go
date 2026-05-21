@@ -29,6 +29,7 @@ type Querier interface {
 	ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error)
 	ListProducts(ctx context.Context, tenantID uuid.UUID) ([]Product, error)
 	ListTenants(ctx context.Context) ([]Tenant, error)
+	ListUsers(ctx context.Context) ([]User, error)
 	SetTenantOwner(ctx context.Context, arg SetTenantOwnerParams) (Tenant, error)
 	UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, error)
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
@@ -37,6 +38,7 @@ type Querier interface {
 	UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Tenant, error)
 	UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAppearanceParams) (Tenant, error)
 	UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconParams) (Tenant, error)
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)
