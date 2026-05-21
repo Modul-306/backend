@@ -1,8 +1,11 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/M306/backend/internal/db/sqlc"
@@ -46,8 +49,14 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/register", s.handleRegister)
+		r.Get("/auth/me", s.handleMe)
 		r.Get("/tenants", s.handleListTenants)
+		r.Get("/tenants/{slug}", s.handleGetTenant)
 		r.Post("/tenants", s.handleCreateTenant)
+		r.Put("/tenants/{id}", s.handleUpdateTenant)
+		r.Put("/tenants/{id}/owner", s.handleSetTenantOwner)
+		r.Delete("/tenants/{id}", s.handleDeleteTenant)
+		r.Get("/users", s.handleListUsers)
 		r.Post("/upload", s.handleUpload)
 
 		r.Group(func(r chi.Router) {
@@ -59,6 +68,8 @@ func (s *Server) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.JWTMiddleware)
 
+				r.Put("/tenants/icon", s.handleUpdateTenantIcon)
+				r.Put("/tenants/appearance", s.handleUpdateTenantAppearance)
 				r.Post("/products", s.handleAddProduct)
 				r.Post("/blogs", s.handleCreateBlog)
 				r.Post("/orders", s.handlePlaceOrder)
@@ -75,10 +86,8 @@ type loginRequest struct {
 }
 
 type registerRequest struct {
-	TenantID string `json:"tenant_id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Role     string `json:"role"`
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -95,10 +104,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	arg := db.CreateUserParams{
-		TenantID:     uuid.MustParse(req.TenantID),
+		TenantID:     uuid.NullUUID{},
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         req.Role,
+		Role:         "customer",
 	}
 
 	user, err := s.db.CreateUser(r.Context(), arg)
@@ -131,10 +140,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":   user.ID,
-		"tenant_id": user.TenantID,
-		"role":      user.Role,
-		"exp":       time.Now().Add(time.Hour * 24).Unix(),
+		"user_id":   user.ID.String(),
+		"tenant_id": func() string {
+			if user.TenantID.Valid {
+				return user.TenantID.UUID.String()
+			}
+			return ""
+		}(),
+		"role": user.Role,
+		"exp":  time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(s.jwtSecret))
@@ -144,8 +158,35 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"token": tokenString,
-		"role":  user.Role,
+		"token":   tokenString,
+		"role":    user.Role,
+		"user_id": user.ID.String(),
+	})
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"user_id":   claims["user_id"],
+		"tenant_id": claims["tenant_id"],
+		"role":      claims["role"],
 	})
 }
 
@@ -159,18 +200,70 @@ func (s *Server) handleListTenants(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
-	var arg db.CreateTenantParams
-	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
+	var req struct {
+		Name    string `json:"name"`
+		Slug    string `json:"slug"`
+		OwnerID string `json:"owner_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-	tenant, err := s.db.CreateTenant(r.Context(), arg)
+
+	tenant, err := s.db.CreateTenant(r.Context(), db.CreateTenantParams{
+		Name: req.Name,
+		Slug: req.Slug,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// If an existing owner_id is provided, link them as owner
+	if req.OwnerID != "" {
+		ownerUUID, err := uuid.Parse(req.OwnerID)
+		if err != nil {
+			http.Error(w, "Invalid owner_id UUID", http.StatusBadRequest)
+			return
+		}
+		tenant, err = s.db.SetTenantOwner(r.Context(), db.SetTenantOwnerParams{
+			ID:      tenant.ID,
+			OwnerID: uuid.NullUUID{UUID: ownerUUID, Valid: true},
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(tenant)
+}
+
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.db.ListUsers(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Return only safe fields (no password hashes)
+	type safeUser struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	var result []safeUser
+	for _, u := range users {
+		result = append(result, safeUser{
+			ID:    u.ID.String(),
+			Email: u.Email,
+			Role:  u.Role,
+		})
+	}
+	if result == nil {
+		result = []safeUser{}
+	}
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -219,17 +312,35 @@ func (s *Server) handleListBlogs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAddProduct(w http.ResponseWriter, r *http.Request) {
 	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
-	var arg db.CreateProductParams
-	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	
+	var req struct {
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Price       float64 `json:"price"`
+		Stock       int32   `json:"stock"`
+		ImageUrl    string  `json:"image_url"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	arg.TenantID = tenant.ID
+
+	arg := db.CreateProductParams{
+		TenantID:    tenant.ID,
+		Name:        req.Name,
+		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Price:       fmt.Sprintf("%.2f", req.Price),
+		Stock:       req.Stock,
+		ImageUrl:    sql.NullString{String: req.ImageUrl, Valid: req.ImageUrl != ""},
+	}
+
 	product, err := s.db.CreateProduct(r.Context(), arg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(product)
 }
@@ -254,4 +365,153 @@ func (s *Server) handleCreateBlog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 	// Implementation placeholder
 	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *Server) handleUpdateTenantIcon(w http.ResponseWriter, r *http.Request) {
+	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
+
+	var req struct {
+		IconUrl string `json:"icon_url"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	arg := db.UpdateTenantIconParams{
+		ID:      tenant.ID,
+		IconUrl: sql.NullString{String: req.IconUrl, Valid: req.IconUrl != ""},
+	}
+
+	updatedTenant, err := s.db.UpdateTenantIcon(r.Context(), arg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(updatedTenant)
+}
+
+func (s *Server) handleUpdateTenantAppearance(w http.ResponseWriter, r *http.Request) {
+	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
+
+	var req struct {
+		CoverUrl    string `json:"cover_url"`
+		Description string `json:"description"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	arg := db.UpdateTenantAppearanceParams{
+		ID:          tenant.ID,
+		CoverUrl:    sql.NullString{String: req.CoverUrl, Valid: req.CoverUrl != ""},
+		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+	}
+
+	updatedTenant, err := s.db.UpdateTenantAppearance(r.Context(), arg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(updatedTenant)
+}
+
+func (s *Server) handleGetTenant(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	tenant, err := s.db.GetTenantBySlug(r.Context(), slug)
+	if err != nil {
+		http.Error(w, "Tenant not found", http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(tenant)
+}
+
+func (s *Server) handleUpdateTenant(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid tenant ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	arg := db.UpdateTenantParams{
+		ID:   id,
+		Name: req.Name,
+		Slug: req.Slug,
+	}
+
+	updatedTenant, err := s.db.UpdateTenant(r.Context(), arg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(updatedTenant)
+}
+
+func (s *Server) handleDeleteTenant(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid tenant ID", http.StatusBadRequest)
+		return
+	}
+
+	err = s.db.DeleteTenant(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleSetTenantOwner(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid tenant ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		OwnerID string `json:"owner_id"` // empty string = clear owner
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	var ownerID uuid.NullUUID
+	if req.OwnerID != "" {
+		parsed, err := uuid.Parse(req.OwnerID)
+		if err != nil {
+			http.Error(w, "Invalid owner_id UUID", http.StatusBadRequest)
+			return
+		}
+		ownerID = uuid.NullUUID{UUID: parsed, Valid: true}
+	}
+
+	tenant, err := s.db.SetTenantOwner(r.Context(), db.SetTenantOwnerParams{
+		ID:      id,
+		OwnerID: ownerID,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(tenant)
 }

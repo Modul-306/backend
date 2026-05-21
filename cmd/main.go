@@ -13,6 +13,7 @@ import (
 	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/M306/backend/internal/storage"
 	_ "github.com/lib/pq"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -38,29 +39,38 @@ func main() {
 	}
 
 	// Run migrations
-	migrationPath := "migrations/000001_init_schema.up.sql"
-	migrationSql, err := os.ReadFile(migrationPath)
-	if err != nil {
-		log.Printf("Warning: could not read migration file: %v", err)
-	} else {
-		// Ensure pgcrypto for UUIDs if needed (though PG15 has it built-in)
-		_, _ = conn.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
-		
-		queries := strings.Split(string(migrationSql), ";")
-		for _, q := range queries {
-			q = strings.TrimSpace(q)
-			if q == "" {
-				continue
-			}
-			_, err = conn.Exec(q)
-			if err != nil {
-				// Don't fail if table already exists
-				if !strings.Contains(err.Error(), "already exists") {
-					log.Printf("Migration part failed: %v", err)
+	entries, err := os.ReadDir("migrations")
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
+				migrationSql, err := os.ReadFile("migrations/" + entry.Name())
+				if err != nil {
+					log.Printf("Warning: could not read migration file %s: %v", entry.Name(), err)
+					continue
 				}
+
+				// Ensure pgcrypto for UUIDs if needed
+				_, _ = conn.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+				
+				queries := strings.Split(string(migrationSql), ";")
+				for _, q := range queries {
+					q = strings.TrimSpace(q)
+					if q == "" {
+						continue
+					}
+					_, err = conn.Exec(q)
+					if err != nil {
+						// Don't fail if table/column already exists
+						if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column name") {
+							log.Printf("Migration part failed in %s: %v", entry.Name(), err)
+						}
+					}
+				}
+				log.Printf("Migration %s processed", entry.Name())
 			}
 		}
-		log.Println("Database migrations processed")
+	} else {
+		log.Printf("Warning: could not read migrations directory: %v", err)
 	}
 
 	dbQueries := db.New(conn)
@@ -85,10 +95,10 @@ func main() {
 
 	// Seed default tenant and admin user
 	ctx := context.Background()
-	tenant, err := dbQueries.GetTenantBySlug(ctx, "default")
+	_, err = dbQueries.GetTenantBySlug(ctx, "default")
 	if err != nil {
 		log.Println("Seeding default tenant...")
-		tenant, _ = dbQueries.CreateTenant(ctx, db.CreateTenantParams{
+		_, _ = dbQueries.CreateTenant(ctx, db.CreateTenantParams{
 			Name: "Default Farm",
 			Slug: "default",
 		})
@@ -100,10 +110,10 @@ func main() {
 		// password: admin
 		hash, _ := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
 		_, _ = dbQueries.CreateUser(ctx, db.CreateUserParams{
-			TenantID:     tenant.ID,
+			TenantID:     uuid.NullUUID{},
 			Email:        "admin@cattlehof.ch",
 			PasswordHash: string(hash),
-			Role:         "farmer_admin",
+			Role:         "platform_admin",
 		})
 	}
 

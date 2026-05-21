@@ -1,0 +1,2 @@
+ALTER TABLE tenants DROP COLUMN IF EXISTS cover_url;
+ALTER TABLE tenants DROP COLUMN IF EXISTS description;
