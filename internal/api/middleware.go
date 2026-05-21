@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/golang-jwt/jwt/v5"
 )
 
