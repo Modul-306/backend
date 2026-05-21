@@ -6,6 +6,15 @@ INSERT INTO tenants (name, slug)
 VALUES ($1, $2)
 RETURNING *;
 
+-- name: UpdateTenantIcon :one
+UPDATE tenants SET icon_url = $2 WHERE id = $1 RETURNING *;
+
+-- name: UpdateTenant :one
+UPDATE tenants SET name = $2, slug = $3 WHERE id = $1 RETURNING *;
+
+-- name: DeleteTenant :exec
+DELETE FROM tenants WHERE id = $1;
+
 -- name: ListTenants :many
 SELECT * FROM tenants ORDER BY name;
 
