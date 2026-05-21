@@ -573,7 +573,7 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if foundProduct.Stock < item.quantity {
+		if foundProduct.Stock < item.Quantity {
 			s.errorResponse(w, r, http.StatusBadRequest, "Insufficient stock for product: "+foundProduct.Name)
 			return
 		}
