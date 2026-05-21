@@ -78,6 +78,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listTenantsStmt, err = db.PrepareContext(ctx, listTenants); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTenants: %w", err)
 	}
+	if q.listUsersStmt, err = db.PrepareContext(ctx, listUsers); err != nil {
+		return nil, fmt.Errorf("error preparing query ListUsers: %w", err)
+	}
 	if q.setTenantOwnerStmt, err = db.PrepareContext(ctx, setTenantOwner); err != nil {
 		return nil, fmt.Errorf("error preparing query SetTenantOwner: %w", err)
 	}
@@ -101,6 +104,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateTenantIconStmt, err = db.PrepareContext(ctx, updateTenantIcon); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateTenantIcon: %w", err)
+	}
+	if q.updateUserRoleStmt, err = db.PrepareContext(ctx, updateUserRole); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserRole: %w", err)
 	}
 	return &q, nil
 }
@@ -197,6 +203,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listTenantsStmt: %w", cerr)
 		}
 	}
+	if q.listUsersStmt != nil {
+		if cerr := q.listUsersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listUsersStmt: %w", cerr)
+		}
+	}
 	if q.setTenantOwnerStmt != nil {
 		if cerr := q.setTenantOwnerStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setTenantOwnerStmt: %w", cerr)
@@ -235,6 +246,11 @@ func (q *Queries) Close() error {
 	if q.updateTenantIconStmt != nil {
 		if cerr := q.updateTenantIconStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateTenantIconStmt: %w", cerr)
+		}
+	}
+	if q.updateUserRoleStmt != nil {
+		if cerr := q.updateUserRoleStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserRoleStmt: %w", cerr)
 		}
 	}
 	return err
@@ -294,6 +310,7 @@ type Queries struct {
 	listOrdersByUserStmt       *sql.Stmt
 	listProductsStmt           *sql.Stmt
 	listTenantsStmt            *sql.Stmt
+	listUsersStmt              *sql.Stmt
 	setTenantOwnerStmt         *sql.Stmt
 	updateBlogStmt             *sql.Stmt
 	updateOrderStatusStmt      *sql.Stmt
@@ -302,6 +319,7 @@ type Queries struct {
 	updateTenantStmt           *sql.Stmt
 	updateTenantAppearanceStmt *sql.Stmt
 	updateTenantIconStmt       *sql.Stmt
+	updateUserRoleStmt         *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -326,6 +344,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listOrdersByUserStmt:       q.listOrdersByUserStmt,
 		listProductsStmt:           q.listProductsStmt,
 		listTenantsStmt:            q.listTenantsStmt,
+		listUsersStmt:              q.listUsersStmt,
 		setTenantOwnerStmt:         q.setTenantOwnerStmt,
 		updateBlogStmt:             q.updateBlogStmt,
 		updateOrderStatusStmt:      q.updateOrderStatusStmt,
@@ -334,5 +353,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateTenantStmt:           q.updateTenantStmt,
 		updateTenantAppearanceStmt: q.updateTenantAppearanceStmt,
 		updateTenantIconStmt:       q.updateTenantIconStmt,
+		updateUserRoleStmt:         q.updateUserRoleStmt,
 	}
 }
