@@ -74,3 +74,27 @@ RETURNING *;
 INSERT INTO order_items (order_id, product_id, quantity, price_at_time)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
+
+-- name: ListOrdersByTenant :many
+SELECT * FROM orders WHERE tenant_id = $1 ORDER BY created_at DESC;
+
+-- name: ListOrdersByUser :many
+SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC;
+
+-- name: GetOrderItems :many
+SELECT oi.*, p.name as product_name 
+FROM order_items oi
+JOIN products p ON oi.product_id = p.id
+WHERE oi.order_id = $1;
+
+-- name: UpdateOrderStatus :one
+UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING *;
+
+-- name: SetTenantOwner :one
+UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING *;
+
+-- name: UpdateTenantAppearance :one
+UPDATE tenants SET cover_url = $2, description = $3 WHERE id = $1 RETURNING *;
+
+-- name: GetUserByID :one
+SELECT * FROM users WHERE id = $1 LIMIT 1;

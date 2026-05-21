@@ -15,6 +15,13 @@ const (
 	TenantContextKey contextKey = "tenant"
 )
 
+type UserClaims struct {
+	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
+	TenantID string `json:"tenant_id"`
+	Role     string `json:"role"`
+}
+
 func (s *Server) JWTMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -39,8 +46,75 @@ func (s *Server) JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), UserContextKey, claims)
+		userClaims := UserClaims{
+			UserID: claims["user_id"].(string),
+			Role:   claims["role"].(string),
+		}
+		if email, ok := claims["email"].(string); ok {
+			userClaims.Email = email
+		}
+		if tid, ok := claims["tenant_id"].(string); ok {
+			userClaims.TenantID = tid
+		}
+
+		ctx := context.WithValue(r.Context(), UserContextKey, userClaims)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *Server) RequireRole(roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := r.Context().Value(UserContextKey).(UserClaims)
+			if !ok {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			authorized := false
+			for _, role := range roles {
+				if claims.Role == role {
+					authorized = true
+					break
+				}
+			}
+
+			if !authorized {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (s *Server) RequireTenantAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(UserContextKey).(UserClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Platform admins can access any tenant
+		if claims.Role == "platform_admin" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tenant, ok := r.Context().Value(TenantContextKey).(db.Tenant)
+		if !ok {
+			http.Error(w, "Tenant context missing", http.StatusInternalServerError)
+			return
+		}
+
+		if claims.TenantID != tenant.ID.String() {
+			http.Error(w, "Forbidden: Access denied to this tenant", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
