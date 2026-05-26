@@ -246,8 +246,8 @@ func (s *Server) handleListTenants(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
 
 	tenants, err := s.db.ListTenants(r.Context(), db.ListTenantsParams{
-		Column1:  sql.NullString{String: search, Valid: search != ""},
-		Category: sql.NullString{String: category, Valid: category != ""},
+		Column1:  sql.NullString{String: search, Valid: true},
+		Category: sql.NullString{String: category, Valid: true},
 	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list tenants")
@@ -356,8 +356,8 @@ func (s *Server) handleListProducts(w http.ResponseWriter, r *http.Request) {
 
 	products, err := s.db.ListProducts(r.Context(), db.ListProductsParams{
 		TenantID: tenant.ID,
-		Column2:  sql.NullString{String: search, Valid: search != ""},
-		Category: sql.NullString{String: category, Valid: category != ""},
+		Column2:  sql.NullString{String: search, Valid: true},
+		Category: sql.NullString{String: category, Valid: true},
 	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list products")
@@ -588,8 +588,8 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 
 	products, err := s.db.ListProducts(r.Context(), db.ListProductsParams{
 		TenantID: tenant.ID,
-		Column2:  sql.NullString{Valid: false},
-		Category: sql.NullString{Valid: false},
+		Column2:  sql.NullString{String: "", Valid: true},
+		Category: sql.NullString{String: "", Valid: true},
 	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to retrieve products")
