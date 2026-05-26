@@ -306,6 +306,23 @@ func (q *Queries) GetAverageRating(ctx context.Context, productID uuid.UUID) (Ge
 	return i, err
 }
 
+const getBlog = `-- name: GetBlog :one
+SELECT id, tenant_id, title, content_md, published_at FROM blogs WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetBlog(ctx context.Context, id uuid.UUID) (Blog, error) {
+	row := q.queryRow(ctx, q.getBlogStmt, getBlog, id)
+	var i Blog
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Title,
+		&i.ContentMd,
+		&i.PublishedAt,
+	)
+	return i, err
+}
+
 const getOrderItems = `-- name: GetOrderItems :many
 SELECT oi.id, oi.order_id, oi.product_id, oi.quantity, oi.price_at_time, p.name as product_name 
 FROM order_items oi
@@ -673,8 +690,8 @@ func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Ord
 const listProducts = `-- name: ListProducts :many
 SELECT id, tenant_id, name, description, price, stock, image_url, created_at, category FROM products 
 WHERE tenant_id = $1 
-AND (name ILIKE '%' || $2 || '%' OR category ILIKE '%' || $2 || '%')
-AND (category = $3 OR $3 = '')
+AND (name ILIKE '%' || $2 || '%' OR COALESCE(category, '') ILIKE '%' || $2 || '%')
+AND (COALESCE(category, '') = $3 OR $3 = '')
 ORDER BY created_at DESC
 `
 
@@ -831,8 +848,8 @@ func (q *Queries) ListTenantOwners(ctx context.Context, tenantID uuid.UUID) ([]L
 
 const listTenants = `-- name: ListTenants :many
 SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category FROM tenants 
-WHERE (name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
-AND (category = $2 OR $2 = '')
+WHERE (name ILIKE '%' || $1 || '%' OR COALESCE(category, '') ILIKE '%' || $1 || '%')
+AND (COALESCE(category, '') = $2 OR $2 = '')
 ORDER BY name
 `
 

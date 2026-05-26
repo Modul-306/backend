@@ -17,8 +17,8 @@ DELETE FROM tenants WHERE id = $1;
 
 -- name: ListTenants :many
 SELECT * FROM tenants 
-WHERE (name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
-AND (category = $2 OR $2 = '')
+WHERE (name ILIKE '%' || $1 || '%' OR COALESCE(category, '') ILIKE '%' || $1 || '%')
+AND (COALESCE(category, '') = $2 OR $2 = '')
 ORDER BY name;
 
 -- name: CreateUser :one
@@ -32,8 +32,8 @@ SELECT * FROM users WHERE email = $1 LIMIT 1;
 -- name: ListProducts :many
 SELECT * FROM products 
 WHERE tenant_id = $1 
-AND (name ILIKE '%' || $2 || '%' OR category ILIKE '%' || $2 || '%')
-AND (category = $3 OR $3 = '')
+AND (name ILIKE '%' || $2 || '%' OR COALESCE(category, '') ILIKE '%' || $2 || '%')
+AND (COALESCE(category, '') = $3 OR $3 = '')
 ORDER BY created_at DESC;
 
 -- name: CreateProduct :one
@@ -77,6 +77,9 @@ RETURNING *;
 INSERT INTO blogs (tenant_id, title, content_md)
 VALUES ($1, $2, $3)
 RETURNING *;
+
+-- name: GetBlog :one
+SELECT * FROM blogs WHERE id = $1 LIMIT 1;
 
 -- name: ListBlogs :many
 SELECT * FROM blogs WHERE tenant_id = $1 ORDER BY published_at DESC;
