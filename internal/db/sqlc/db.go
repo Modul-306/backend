@@ -60,6 +60,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAverageRatingStmt, err = db.PrepareContext(ctx, getAverageRating); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAverageRating: %w", err)
 	}
+	if q.getBlogStmt, err = db.PrepareContext(ctx, getBlog); err != nil {
+		return nil, fmt.Errorf("error preparing query GetBlog: %w", err)
+	}
 	if q.getOrderItemsStmt, err = db.PrepareContext(ctx, getOrderItems); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrderItems: %w", err)
 	}
@@ -213,6 +216,11 @@ func (q *Queries) Close() error {
 	if q.getAverageRatingStmt != nil {
 		if cerr := q.getAverageRatingStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAverageRatingStmt: %w", cerr)
+		}
+	}
+	if q.getBlogStmt != nil {
+		if cerr := q.getBlogStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getBlogStmt: %w", cerr)
 		}
 	}
 	if q.getOrderItemsStmt != nil {
@@ -416,6 +424,7 @@ type Queries struct {
 	deleteProductStmt          *sql.Stmt
 	deleteTenantStmt           *sql.Stmt
 	getAverageRatingStmt       *sql.Stmt
+	getBlogStmt                *sql.Stmt
 	getOrderItemsStmt          *sql.Stmt
 	getProductStmt             *sql.Stmt
 	getRevenueByDayStmt        *sql.Stmt
@@ -464,6 +473,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteProductStmt:          q.deleteProductStmt,
 		deleteTenantStmt:           q.deleteTenantStmt,
 		getAverageRatingStmt:       q.getAverageRatingStmt,
+		getBlogStmt:                q.getBlogStmt,
 		getOrderItemsStmt:          q.getOrderItemsStmt,
 		getProductStmt:             q.getProductStmt,
 		getRevenueByDayStmt:        q.getRevenueByDayStmt,

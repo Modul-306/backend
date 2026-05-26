@@ -24,6 +24,7 @@ type Querier interface {
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteTenant(ctx context.Context, id uuid.UUID) error
 	GetAverageRating(ctx context.Context, productID uuid.UUID) (GetAverageRatingRow, error)
+	GetBlog(ctx context.Context, id uuid.UUID) (Blog, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]GetOrderItemsRow, error)
 	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]GetRevenueByDayRow, error)
