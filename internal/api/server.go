@@ -55,14 +55,15 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/register", s.handleRegister)
 		r.Get("/tenants", s.handleListTenants)
+		r.Get("/tenants/{slug}", s.handleGetTenant) // Moved out of middleware
 		r.Get("/tenants/categories", s.handleListTenantCategories)
 		
 		r.Group(func(r chi.Router) {
 			r.Use(s.TenantMiddleware)
-			r.Get("/tenants/{slug}", s.handleGetTenant)
 			r.Get("/products", s.handleListProducts)
 			r.Get("/categories", s.handleListCategories)
 			r.Get("/blogs", s.handleListBlogs)
+			r.Get("/blogs/{id}", s.handleGetBlog)
 		})
 
 		// --- Authenticated Routes (Any Role) ---
@@ -82,6 +83,7 @@ func (s *Server) Routes() http.Handler {
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.TenantMiddleware)
+			r.Get("/products/{id}", s.handleGetProduct)
 			r.Get("/products/{id}/reviews", s.handleListReviews)
 			r.Get("/products/{id}/reviews/stats", s.handleGetReviewStats)
 		})
@@ -94,6 +96,9 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/tenants", s.handleCreateTenant)
 			r.Put("/tenants/{id}", s.handleUpdateTenant)
 			r.Put("/tenants/{id}/owner", s.handleSetTenantOwner)
+			r.Post("/tenants/{id}/owners", s.handleAddTenantOwner)
+			r.Delete("/tenants/{id}/owners/{userID}", s.handleRemoveTenantOwner)
+			r.Get("/tenants/{id}/owners", s.handleListTenantOwners)
 			r.Delete("/tenants/{id}", s.handleDeleteTenant)
 			r.Get("/users", s.handleListUsers)
 		})
