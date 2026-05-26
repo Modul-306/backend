@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -24,19 +25,23 @@ type Querier interface {
 	DeleteTenant(ctx context.Context, id uuid.UUID) error
 	GetAverageRating(ctx context.Context, productID uuid.UUID) (GetAverageRatingRow, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]GetOrderItemsRow, error)
+	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]GetRevenueByDayRow, error)
 	GetTenantBySlug(ctx context.Context, slug string) (Tenant, error)
 	GetTopSellingProducts(ctx context.Context, tenantID uuid.UUID) ([]GetTopSellingProductsRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserDiscount(ctx context.Context, id uuid.UUID) (string, error)
 	IsTenantOwner(ctx context.Context, arg IsTenantOwnerParams) (bool, error)
 	ListBlogs(ctx context.Context, tenantID uuid.UUID) ([]Blog, error)
+	ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql.NullString, error)
 	ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]Order, error)
 	ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error)
-	ListProducts(ctx context.Context, tenantID uuid.UUID) ([]Product, error)
+	ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error)
 	ListReviewsByProduct(ctx context.Context, productID uuid.UUID) ([]ListReviewsByProductRow, error)
+	ListTenantCategories(ctx context.Context) ([]sql.NullString, error)
 	ListTenantOwners(ctx context.Context, tenantID uuid.UUID) ([]ListTenantOwnersRow, error)
-	ListTenants(ctx context.Context) ([]Tenant, error)
+	ListTenants(ctx context.Context, arg ListTenantsParams) ([]Tenant, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	RemoveTenantOwner(ctx context.Context, arg RemoveTenantOwnerParams) error
 	SetTenantOwner(ctx context.Context, arg SetTenantOwnerParams) (Tenant, error)
@@ -47,6 +52,7 @@ type Querier interface {
 	UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Tenant, error)
 	UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAppearanceParams) (Tenant, error)
 	UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconParams) (Tenant, error)
+	UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyaltyTierParams) (User, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 

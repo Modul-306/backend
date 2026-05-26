@@ -63,6 +63,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getOrderItemsStmt, err = db.PrepareContext(ctx, getOrderItems); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrderItems: %w", err)
 	}
+	if q.getProductStmt, err = db.PrepareContext(ctx, getProduct); err != nil {
+		return nil, fmt.Errorf("error preparing query GetProduct: %w", err)
+	}
 	if q.getRevenueByDayStmt, err = db.PrepareContext(ctx, getRevenueByDay); err != nil {
 		return nil, fmt.Errorf("error preparing query GetRevenueByDay: %w", err)
 	}
@@ -78,11 +81,17 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUserByIDStmt, err = db.PrepareContext(ctx, getUserByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserByID: %w", err)
 	}
+	if q.getUserDiscountStmt, err = db.PrepareContext(ctx, getUserDiscount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserDiscount: %w", err)
+	}
 	if q.isTenantOwnerStmt, err = db.PrepareContext(ctx, isTenantOwner); err != nil {
 		return nil, fmt.Errorf("error preparing query IsTenantOwner: %w", err)
 	}
 	if q.listBlogsStmt, err = db.PrepareContext(ctx, listBlogs); err != nil {
 		return nil, fmt.Errorf("error preparing query ListBlogs: %w", err)
+	}
+	if q.listCategoriesStmt, err = db.PrepareContext(ctx, listCategories); err != nil {
+		return nil, fmt.Errorf("error preparing query ListCategories: %w", err)
 	}
 	if q.listOrdersByTenantStmt, err = db.PrepareContext(ctx, listOrdersByTenant); err != nil {
 		return nil, fmt.Errorf("error preparing query ListOrdersByTenant: %w", err)
@@ -95,6 +104,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listReviewsByProductStmt, err = db.PrepareContext(ctx, listReviewsByProduct); err != nil {
 		return nil, fmt.Errorf("error preparing query ListReviewsByProduct: %w", err)
+	}
+	if q.listTenantCategoriesStmt, err = db.PrepareContext(ctx, listTenantCategories); err != nil {
+		return nil, fmt.Errorf("error preparing query ListTenantCategories: %w", err)
 	}
 	if q.listTenantOwnersStmt, err = db.PrepareContext(ctx, listTenantOwners); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTenantOwners: %w", err)
@@ -131,6 +143,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateTenantIconStmt, err = db.PrepareContext(ctx, updateTenantIcon); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateTenantIcon: %w", err)
+	}
+	if q.updateUserLoyaltyTierStmt, err = db.PrepareContext(ctx, updateUserLoyaltyTier); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserLoyaltyTier: %w", err)
 	}
 	if q.updateUserRoleStmt, err = db.PrepareContext(ctx, updateUserRole); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserRole: %w", err)
@@ -205,6 +220,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getOrderItemsStmt: %w", cerr)
 		}
 	}
+	if q.getProductStmt != nil {
+		if cerr := q.getProductStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getProductStmt: %w", cerr)
+		}
+	}
 	if q.getRevenueByDayStmt != nil {
 		if cerr := q.getRevenueByDayStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getRevenueByDayStmt: %w", cerr)
@@ -230,6 +250,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserByIDStmt: %w", cerr)
 		}
 	}
+	if q.getUserDiscountStmt != nil {
+		if cerr := q.getUserDiscountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserDiscountStmt: %w", cerr)
+		}
+	}
 	if q.isTenantOwnerStmt != nil {
 		if cerr := q.isTenantOwnerStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing isTenantOwnerStmt: %w", cerr)
@@ -238,6 +263,11 @@ func (q *Queries) Close() error {
 	if q.listBlogsStmt != nil {
 		if cerr := q.listBlogsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listBlogsStmt: %w", cerr)
+		}
+	}
+	if q.listCategoriesStmt != nil {
+		if cerr := q.listCategoriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listCategoriesStmt: %w", cerr)
 		}
 	}
 	if q.listOrdersByTenantStmt != nil {
@@ -258,6 +288,11 @@ func (q *Queries) Close() error {
 	if q.listReviewsByProductStmt != nil {
 		if cerr := q.listReviewsByProductStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listReviewsByProductStmt: %w", cerr)
+		}
+	}
+	if q.listTenantCategoriesStmt != nil {
+		if cerr := q.listTenantCategoriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listTenantCategoriesStmt: %w", cerr)
 		}
 	}
 	if q.listTenantOwnersStmt != nil {
@@ -320,6 +355,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateTenantIconStmt: %w", cerr)
 		}
 	}
+	if q.updateUserLoyaltyTierStmt != nil {
+		if cerr := q.updateUserLoyaltyTierStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserLoyaltyTierStmt: %w", cerr)
+		}
+	}
 	if q.updateUserRoleStmt != nil {
 		if cerr := q.updateUserRoleStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserRoleStmt: %w", cerr)
@@ -377,17 +417,21 @@ type Queries struct {
 	deleteTenantStmt           *sql.Stmt
 	getAverageRatingStmt       *sql.Stmt
 	getOrderItemsStmt          *sql.Stmt
+	getProductStmt             *sql.Stmt
 	getRevenueByDayStmt        *sql.Stmt
 	getTenantBySlugStmt        *sql.Stmt
 	getTopSellingProductsStmt  *sql.Stmt
 	getUserByEmailStmt         *sql.Stmt
 	getUserByIDStmt            *sql.Stmt
+	getUserDiscountStmt        *sql.Stmt
 	isTenantOwnerStmt          *sql.Stmt
 	listBlogsStmt              *sql.Stmt
+	listCategoriesStmt         *sql.Stmt
 	listOrdersByTenantStmt     *sql.Stmt
 	listOrdersByUserStmt       *sql.Stmt
 	listProductsStmt           *sql.Stmt
 	listReviewsByProductStmt   *sql.Stmt
+	listTenantCategoriesStmt   *sql.Stmt
 	listTenantOwnersStmt       *sql.Stmt
 	listTenantsStmt            *sql.Stmt
 	listUsersStmt              *sql.Stmt
@@ -400,6 +444,7 @@ type Queries struct {
 	updateTenantStmt           *sql.Stmt
 	updateTenantAppearanceStmt *sql.Stmt
 	updateTenantIconStmt       *sql.Stmt
+	updateUserLoyaltyTierStmt  *sql.Stmt
 	updateUserRoleStmt         *sql.Stmt
 }
 
@@ -420,17 +465,21 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteTenantStmt:           q.deleteTenantStmt,
 		getAverageRatingStmt:       q.getAverageRatingStmt,
 		getOrderItemsStmt:          q.getOrderItemsStmt,
+		getProductStmt:             q.getProductStmt,
 		getRevenueByDayStmt:        q.getRevenueByDayStmt,
 		getTenantBySlugStmt:        q.getTenantBySlugStmt,
 		getTopSellingProductsStmt:  q.getTopSellingProductsStmt,
 		getUserByEmailStmt:         q.getUserByEmailStmt,
 		getUserByIDStmt:            q.getUserByIDStmt,
+		getUserDiscountStmt:        q.getUserDiscountStmt,
 		isTenantOwnerStmt:          q.isTenantOwnerStmt,
 		listBlogsStmt:              q.listBlogsStmt,
+		listCategoriesStmt:         q.listCategoriesStmt,
 		listOrdersByTenantStmt:     q.listOrdersByTenantStmt,
 		listOrdersByUserStmt:       q.listOrdersByUserStmt,
 		listProductsStmt:           q.listProductsStmt,
 		listReviewsByProductStmt:   q.listReviewsByProductStmt,
+		listTenantCategoriesStmt:   q.listTenantCategoriesStmt,
 		listTenantOwnersStmt:       q.listTenantOwnersStmt,
 		listTenantsStmt:            q.listTenantsStmt,
 		listUsersStmt:              q.listUsersStmt,
@@ -443,6 +492,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateTenantStmt:           q.updateTenantStmt,
 		updateTenantAppearanceStmt: q.updateTenantAppearanceStmt,
 		updateTenantIconStmt:       q.updateTenantIconStmt,
+		updateUserLoyaltyTierStmt:  q.updateUserLoyaltyTierStmt,
 		updateUserRoleStmt:         q.updateUserRoleStmt,
 	}
 }
