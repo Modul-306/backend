@@ -19,6 +19,11 @@ type Blog struct {
 	PublishedAt sql.NullTime `json:"published_at"`
 }
 
+type LoyaltyDiscount struct {
+	TierName        string `json:"tier_name"`
+	DiscountPercent string `json:"discount_percent"`
+}
+
 type Order struct {
 	ID          uuid.UUID    `json:"id"`
 	TenantID    uuid.UUID    `json:"tenant_id"`
@@ -45,6 +50,7 @@ type Product struct {
 	Stock       int32          `json:"stock"`
 	ImageUrl    sql.NullString `json:"image_url"`
 	CreatedAt   sql.NullTime   `json:"created_at"`
+	Category    sql.NullString `json:"category"`
 }
 
 type ProductReview struct {
@@ -65,6 +71,7 @@ type Tenant struct {
 	CoverUrl    sql.NullString `json:"cover_url"`
 	Description sql.NullString `json:"description"`
 	OwnerID     uuid.NullUUID  `json:"owner_id"`
+	Category    sql.NullString `json:"category"`
 }
 
 type TenantOwner struct {
@@ -73,10 +80,11 @@ type TenantOwner struct {
 }
 
 type User struct {
-	ID           uuid.UUID     `json:"id"`
-	TenantID     uuid.NullUUID `json:"tenant_id"`
-	Email        string        `json:"email"`
-	PasswordHash string        `json:"password_hash"`
-	Role         string        `json:"role"`
-	CreatedAt    sql.NullTime  `json:"created_at"`
+	ID           uuid.UUID      `json:"id"`
+	TenantID     uuid.NullUUID  `json:"tenant_id"`
+	Email        string         `json:"email"`
+	PasswordHash string         `json:"password_hash"`
+	Role         string         `json:"role"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	LoyaltyTier  sql.NullString `json:"loyalty_tier"`
 }

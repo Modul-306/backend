@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,18 +20,20 @@ import (
 )
 
 type Server struct {
-	db        *db.Queries
-	conn      *sql.DB
-	storage   storage.Storage
-	jwtSecret string
+	db            *db.Queries
+	conn          *sql.DB
+	storage       storage.Storage
+	notifications NotificationService
+	jwtSecret     string
 }
 
-func NewServer(queries *db.Queries, conn *sql.DB, storage storage.Storage, jwtSecret string) *Server {
+func NewServer(queries *db.Queries, conn *sql.DB, storage storage.Storage, notifications NotificationService, jwtSecret string) *Server {
 	return &Server{
-		db:        queries,
-		conn:      conn,
-		storage:   storage,
-		jwtSecret: jwtSecret,
+		db:            queries,
+		conn:          conn,
+		storage:       storage,
+		notifications: notifications,
+		jwtSecret:     jwtSecret,
 	}
 }
 
@@ -59,11 +62,13 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/register", s.handleRegister)
 		r.Get("/tenants", s.handleListTenants)
+		r.Get("/tenants/categories", s.handleListTenantCategories)
 		
 		r.Group(func(r chi.Router) {
 			r.Use(s.TenantMiddleware)
 			r.Get("/tenants/{slug}", s.handleGetTenant)
 			r.Get("/products", s.handleListProducts)
+			r.Get("/categories", s.handleListCategories)
 			r.Get("/blogs", s.handleListBlogs)
 		})
 
@@ -112,6 +117,8 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
 			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
 			r.Get("/analytics/top-products", s.handleGetTopProducts)
+			r.Get("/categories", s.handleListCategories)
+			r.Get("/loyalty", s.handleGetUserLoyalty)
 			
 			r.Group(func(r chi.Router) {
 				r.Use(s.RequireRole("farmer_admin", "platform_admin", "staff"))
@@ -235,7 +242,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListTenants(w http.ResponseWriter, r *http.Request) {
-	tenants, err := s.db.ListTenants(r.Context())
+	search := r.URL.Query().Get("search")
+	category := r.URL.Query().Get("category")
+
+	tenants, err := s.db.ListTenants(r.Context(), db.ListTenantsParams{
+		Column1:  sql.NullString{String: search, Valid: search != ""},
+		Category: sql.NullString{String: category, Valid: category != ""},
+	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list tenants")
 		return
@@ -338,7 +351,14 @@ func (s *Server) handleListProducts(w http.ResponseWriter, r *http.Request) {
 		s.errorResponse(w, r, http.StatusNotFound, "Tenant not found in context")
 		return
 	}
-	products, err := s.db.ListProducts(r.Context(), tenant.ID)
+	search := r.URL.Query().Get("search")
+	category := r.URL.Query().Get("category")
+
+	products, err := s.db.ListProducts(r.Context(), db.ListProductsParams{
+		TenantID: tenant.ID,
+		Column2:  sql.NullString{String: search, Valid: search != ""},
+		Category: sql.NullString{String: category, Valid: category != ""},
+	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list products")
 		return
@@ -366,6 +386,7 @@ func (s *Server) handleAddProduct(w http.ResponseWriter, r *http.Request) {
 		Price       float64 `json:"price"`
 		Stock       int32   `json:"stock"`
 		ImageUrl    string  `json:"image_url"`
+		Category    string  `json:"category"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -380,6 +401,7 @@ func (s *Server) handleAddProduct(w http.ResponseWriter, r *http.Request) {
 		Price:       fmt.Sprintf("%.2f", req.Price),
 		Stock:       req.Stock,
 		ImageUrl:    sql.NullString{String: req.ImageUrl, Valid: req.ImageUrl != ""},
+		Category:    sql.NullString{String: req.Category, Valid: req.Category != ""},
 	}
 
 	product, err := s.db.CreateProduct(r.Context(), arg)
@@ -407,6 +429,7 @@ func (s *Server) handleUpdateProduct(w http.ResponseWriter, r *http.Request) {
 		Price       float64 `json:"price"`
 		Stock       int32   `json:"stock"`
 		ImageUrl    string  `json:"image_url"`
+		Category    string  `json:"category"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -414,7 +437,7 @@ func (s *Server) handleUpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err := s.db.UpdateProduct(r.Context(), db.UpdateProductParams{
+	arg := db.UpdateProductParams{
 		ID:          id,
 		TenantID:    tenant.ID,
 		Name:        req.Name,
@@ -422,7 +445,10 @@ func (s *Server) handleUpdateProduct(w http.ResponseWriter, r *http.Request) {
 		Price:       fmt.Sprintf("%.2f", req.Price),
 		Stock:       req.Stock,
 		ImageUrl:    sql.NullString{String: req.ImageUrl, Valid: req.ImageUrl != ""},
-	})
+		Category:    sql.NullString{String: req.Category, Valid: req.Category != ""},
+	}
+
+	product, err := s.db.UpdateProduct(r.Context(), arg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -560,7 +586,11 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	var items []itemWithPrice
 
-	products, err := s.db.ListProducts(r.Context(), tenant.ID)
+	products, err := s.db.ListProducts(r.Context(), db.ListProductsParams{
+		TenantID: tenant.ID,
+		Column2:  sql.NullString{Valid: false},
+		Category: sql.NullString{Valid: false},
+	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to retrieve products")
 		return
@@ -599,6 +629,15 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 			quantity:  item.Quantity,
 			price:     foundProduct.Price,
 		})
+	}
+
+	// Apply loyalty discount
+	discountPercentStr, _ := s.db.GetUserDiscount(r.Context(), userID)
+	var discountPercent float64
+	fmt.Sscanf(discountPercentStr, "%f", &discountPercent)
+	
+	if discountPercent > 0 {
+		total = total * (1 - (discountPercent / 100))
 	}
 
 	// 2. Execute order placement in a transaction
@@ -651,6 +690,24 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to commit transaction")
 		return
 	}
+
+	// Post-commit: Send notifications (non-blocking or at least outside tx)
+	go func() {
+		_ = s.notifications.SendEmail(claims.Email, "Order Confirmation", fmt.Sprintf("Your order #%s for %.2f has been received.", order.ID.String()[:8], total))
+		
+		// Check for low stock and notify tenant owners?
+		// For simplicity, just log it for now
+		for _, item := range items {
+			p, _ := s.db.GetProduct(context.Background(), item.productID)
+			if p.Stock < 5 {
+				// Fetch owners and notify them
+				owners, _ := s.db.ListTenantOwners(context.Background(), tenant.ID)
+				for _, o := range owners {
+					_ = s.notifications.SendEmail(o.Email, "LOW STOCK ALERT", fmt.Sprintf("Product %s is low on stock: %d remaining.", p.Name, p.Stock))
+				}
+			}
+		}
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -740,6 +797,12 @@ func (s *Server) handleUpdateOrderStatus(w http.ResponseWriter, r *http.Request)
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to update order status")
 		return
 	}
+
+	// Notify user
+	go func() {
+		u, _ := s.db.GetUserByID(context.Background(), order.UserID)
+		_ = s.notifications.SendEmail(u.Email, "Order Status Update", fmt.Sprintf("Your order #%s status has been updated to: %s", order.ID.String()[:8], order.Status))
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(order)
@@ -1080,4 +1143,61 @@ func (s *Server) handleGetReviewStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
+	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
+	categories, err := s.db.ListCategories(r.Context(), tenant.ID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list categories")
+		return
+	}
+	
+	// Convert sql.NullString to string array
+	res := make([]string, 0)
+	for _, c := range categories {
+		if c.Valid {
+			res = append(res, c.String)
+		}
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleListTenantCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := s.db.ListTenantCategories(r.Context())
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list tenant categories")
+		return
+	}
+	
+	res := make([]string, 0)
+	for _, c := range categories {
+		if c.Valid {
+			res = append(res, c.String)
+		}
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleGetUserLoyalty(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(UserContextKey).(UserClaims)
+	userID, _ := uuid.Parse(claims.UserID)
+	
+	discount, err := s.db.GetUserDiscount(r.Context(), userID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch loyalty info")
+		return
+	}
+	
+	user, _ := s.db.GetUserByID(r.Context(), userID)
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"tier": user.LoyaltyTier.String,
+		"discount_percent": discount,
+	})
 }

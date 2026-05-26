@@ -118,9 +118,9 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 }
 
 const createProduct = `-- name: CreateProduct :one
-INSERT INTO products (tenant_id, name, description, price, stock, image_url)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, tenant_id, name, description, price, stock, image_url, created_at
+INSERT INTO products (tenant_id, name, description, price, stock, image_url, category)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, tenant_id, name, description, price, stock, image_url, created_at, category
 `
 
 type CreateProductParams struct {
@@ -130,6 +130,7 @@ type CreateProductParams struct {
 	Price       string         `json:"price"`
 	Stock       int32          `json:"stock"`
 	ImageUrl    sql.NullString `json:"image_url"`
+	Category    sql.NullString `json:"category"`
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -140,6 +141,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		arg.Price,
 		arg.Stock,
 		arg.ImageUrl,
+		arg.Category,
 	)
 	var i Product
 	err := row.Scan(
@@ -151,6 +153,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.Stock,
 		&i.ImageUrl,
 		&i.CreatedAt,
+		&i.Category,
 	)
 	return i, err
 }
@@ -190,7 +193,7 @@ func (q *Queries) CreateReview(ctx context.Context, arg CreateReviewParams) (Pro
 const createTenant = `-- name: CreateTenant :one
 INSERT INTO tenants (name, slug)
 VALUES ($1, $2)
-RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id
+RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type CreateTenantParams struct {
@@ -210,6 +213,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
 	)
 	return i, err
 }
@@ -217,7 +221,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (tenant_id, email, password_hash, role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, tenant_id, email, password_hash, role, created_at
+RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
 `
 
 type CreateUserParams struct {
@@ -242,6 +246,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.Role,
 		&i.CreatedAt,
+		&i.LoyaltyTier,
 	)
 	return i, err
 }
@@ -347,6 +352,27 @@ func (q *Queries) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]GetOr
 	return items, nil
 }
 
+const getProduct = `-- name: GetProduct :one
+SELECT id, tenant_id, name, description, price, stock, image_url, created_at, category FROM products WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error) {
+	row := q.queryRow(ctx, q.getProductStmt, getProduct, id)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.Description,
+		&i.Price,
+		&i.Stock,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.Category,
+	)
+	return i, err
+}
+
 const getRevenueByDay = `-- name: GetRevenueByDay :many
 SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric) as revenue
 FROM orders
@@ -385,7 +411,7 @@ func (q *Queries) GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]Ge
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id FROM tenants WHERE slug = $1 LIMIT 1
+SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category FROM tenants WHERE slug = $1 LIMIT 1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -400,6 +426,7 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
 	)
 	return i, err
 }
@@ -445,7 +472,7 @@ func (q *Queries) GetTopSellingProducts(ctx context.Context, tenantID uuid.UUID)
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, tenant_id, email, password_hash, role, created_at FROM users WHERE email = $1 LIMIT 1
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -458,12 +485,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PasswordHash,
 		&i.Role,
 		&i.CreatedAt,
+		&i.LoyaltyTier,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, tenant_id, email, password_hash, role, created_at FROM users WHERE id = $1 LIMIT 1
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -476,8 +504,23 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PasswordHash,
 		&i.Role,
 		&i.CreatedAt,
+		&i.LoyaltyTier,
 	)
 	return i, err
+}
+
+const getUserDiscount = `-- name: GetUserDiscount :one
+SELECT ld.discount_percent 
+FROM loyalty_discounts ld
+JOIN users u ON u.loyalty_tier = ld.tier_name
+WHERE u.id = $1
+`
+
+func (q *Queries) GetUserDiscount(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.queryRow(ctx, q.getUserDiscountStmt, getUserDiscount, id)
+	var discount_percent string
+	err := row.Scan(&discount_percent)
+	return discount_percent, err
 }
 
 const isTenantOwner = `-- name: IsTenantOwner :one
@@ -522,6 +565,33 @@ func (q *Queries) ListBlogs(ctx context.Context, tenantID uuid.UUID) ([]Blog, er
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategories = `-- name: ListCategories :many
+SELECT DISTINCT category FROM products WHERE tenant_id = $1
+`
+
+func (q *Queries) ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql.NullString, error) {
+	rows, err := q.query(ctx, q.listCategoriesStmt, listCategories, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []sql.NullString
+	for rows.Next() {
+		var category sql.NullString
+		if err := rows.Scan(&category); err != nil {
+			return nil, err
+		}
+		items = append(items, category)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -601,11 +671,21 @@ func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Ord
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT id, tenant_id, name, description, price, stock, image_url, created_at FROM products WHERE tenant_id = $1 ORDER BY created_at DESC
+SELECT id, tenant_id, name, description, price, stock, image_url, created_at, category FROM products 
+WHERE tenant_id = $1 
+AND (name ILIKE '%' || $2 || '%' OR category ILIKE '%' || $2 || '%')
+AND (category = $3 OR $3 = '')
+ORDER BY created_at DESC
 `
 
-func (q *Queries) ListProducts(ctx context.Context, tenantID uuid.UUID) ([]Product, error) {
-	rows, err := q.query(ctx, q.listProductsStmt, listProducts, tenantID)
+type ListProductsParams struct {
+	TenantID uuid.UUID      `json:"tenant_id"`
+	Column2  sql.NullString `json:"column_2"`
+	Category sql.NullString `json:"category"`
+}
+
+func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error) {
+	rows, err := q.query(ctx, q.listProductsStmt, listProducts, arg.TenantID, arg.Column2, arg.Category)
 	if err != nil {
 		return nil, err
 	}
@@ -622,6 +702,7 @@ func (q *Queries) ListProducts(ctx context.Context, tenantID uuid.UUID) ([]Produ
 			&i.Stock,
 			&i.ImageUrl,
 			&i.CreatedAt,
+			&i.Category,
 		); err != nil {
 			return nil, err
 		}
@@ -685,6 +766,33 @@ func (q *Queries) ListReviewsByProduct(ctx context.Context, productID uuid.UUID)
 	return items, nil
 }
 
+const listTenantCategories = `-- name: ListTenantCategories :many
+SELECT DISTINCT category FROM tenants
+`
+
+func (q *Queries) ListTenantCategories(ctx context.Context) ([]sql.NullString, error) {
+	rows, err := q.query(ctx, q.listTenantCategoriesStmt, listTenantCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []sql.NullString
+	for rows.Next() {
+		var category sql.NullString
+		if err := rows.Scan(&category); err != nil {
+			return nil, err
+		}
+		items = append(items, category)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenantOwners = `-- name: ListTenantOwners :many
 SELECT u.id, u.email, u.role
 FROM users u
@@ -722,11 +830,19 @@ func (q *Queries) ListTenantOwners(ctx context.Context, tenantID uuid.UUID) ([]L
 }
 
 const listTenants = `-- name: ListTenants :many
-SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id FROM tenants ORDER BY name
+SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category FROM tenants 
+WHERE (name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
+AND (category = $2 OR $2 = '')
+ORDER BY name
 `
 
-func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
-	rows, err := q.query(ctx, q.listTenantsStmt, listTenants)
+type ListTenantsParams struct {
+	Column1  sql.NullString `json:"column_1"`
+	Category sql.NullString `json:"category"`
+}
+
+func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Tenant, error) {
+	rows, err := q.query(ctx, q.listTenantsStmt, listTenants, arg.Column1, arg.Category)
 	if err != nil {
 		return nil, err
 	}
@@ -743,6 +859,7 @@ func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
 			&i.CoverUrl,
 			&i.Description,
 			&i.OwnerID,
+			&i.Category,
 		); err != nil {
 			return nil, err
 		}
@@ -758,7 +875,7 @@ func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, tenant_id, email, password_hash, role, created_at FROM users ORDER BY created_at DESC
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -777,6 +894,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PasswordHash,
 			&i.Role,
 			&i.CreatedAt,
+			&i.LoyaltyTier,
 		); err != nil {
 			return nil, err
 		}
@@ -806,7 +924,7 @@ func (q *Queries) RemoveTenantOwner(ctx context.Context, arg RemoveTenantOwnerPa
 }
 
 const setTenantOwner = `-- name: SetTenantOwner :one
-UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id
+UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type SetTenantOwnerParams struct {
@@ -826,6 +944,7 @@ func (q *Queries) SetTenantOwner(ctx context.Context, arg SetTenantOwnerParams) 
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
 	)
 	return i, err
 }
@@ -888,9 +1007,9 @@ func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusPa
 
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE products 
-SET name = $2, description = $3, price = $4, stock = $5, image_url = $6
-WHERE id = $1 AND tenant_id = $7
-RETURNING id, tenant_id, name, description, price, stock, image_url, created_at
+SET name = $2, description = $3, price = $4, stock = $5, image_url = $6, category = $7
+WHERE id = $1 AND tenant_id = $8
+RETURNING id, tenant_id, name, description, price, stock, image_url, created_at, category
 `
 
 type UpdateProductParams struct {
@@ -900,6 +1019,7 @@ type UpdateProductParams struct {
 	Price       string         `json:"price"`
 	Stock       int32          `json:"stock"`
 	ImageUrl    sql.NullString `json:"image_url"`
+	Category    sql.NullString `json:"category"`
 	TenantID    uuid.UUID      `json:"tenant_id"`
 }
 
@@ -911,6 +1031,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		arg.Price,
 		arg.Stock,
 		arg.ImageUrl,
+		arg.Category,
 		arg.TenantID,
 	)
 	var i Product
@@ -923,6 +1044,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.Stock,
 		&i.ImageUrl,
 		&i.CreatedAt,
+		&i.Category,
 	)
 	return i, err
 }
@@ -930,7 +1052,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 const updateProductStock = `-- name: UpdateProductStock :one
 UPDATE products SET stock = stock - $2
 WHERE id = $1 AND tenant_id = $3 AND stock >= $2
-RETURNING id, tenant_id, name, description, price, stock, image_url, created_at
+RETURNING id, tenant_id, name, description, price, stock, image_url, created_at, category
 `
 
 type UpdateProductStockParams struct {
@@ -951,12 +1073,13 @@ func (q *Queries) UpdateProductStock(ctx context.Context, arg UpdateProductStock
 		&i.Stock,
 		&i.ImageUrl,
 		&i.CreatedAt,
+		&i.Category,
 	)
 	return i, err
 }
 
 const updateTenant = `-- name: UpdateTenant :one
-UPDATE tenants SET name = $2, slug = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id
+UPDATE tenants SET name = $2, slug = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type UpdateTenantParams struct {
@@ -977,12 +1100,13 @@ func (q *Queries) UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Ten
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
 	)
 	return i, err
 }
 
 const updateTenantAppearance = `-- name: UpdateTenantAppearance :one
-UPDATE tenants SET cover_url = $2, description = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id
+UPDATE tenants SET cover_url = $2, description = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type UpdateTenantAppearanceParams struct {
@@ -1003,12 +1127,13 @@ func (q *Queries) UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAp
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
 	)
 	return i, err
 }
 
 const updateTenantIcon = `-- name: UpdateTenantIcon :one
-UPDATE tenants SET icon_url = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id
+UPDATE tenants SET icon_url = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type UpdateTenantIconParams struct {
@@ -1028,12 +1153,37 @@ func (q *Queries) UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconPara
 		&i.CoverUrl,
 		&i.Description,
 		&i.OwnerID,
+		&i.Category,
+	)
+	return i, err
+}
+
+const updateUserLoyaltyTier = `-- name: UpdateUserLoyaltyTier :one
+UPDATE users SET loyalty_tier = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
+`
+
+type UpdateUserLoyaltyTierParams struct {
+	ID          uuid.UUID      `json:"id"`
+	LoyaltyTier sql.NullString `json:"loyalty_tier"`
+}
+
+func (q *Queries) UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyaltyTierParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserLoyaltyTierStmt, updateUserLoyaltyTier, arg.ID, arg.LoyaltyTier)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.CreatedAt,
+		&i.LoyaltyTier,
 	)
 	return i, err
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
 `
 
 type UpdateUserRoleParams struct {
@@ -1051,6 +1201,7 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.PasswordHash,
 		&i.Role,
 		&i.CreatedAt,
+		&i.LoyaltyTier,
 	)
 	return i, err
 }
