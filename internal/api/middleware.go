@@ -7,6 +7,7 @@ import (
 
 	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type contextKey string
@@ -110,7 +111,22 @@ func (s *Server) RequireTenantAccess(next http.Handler) http.Handler {
 			return
 		}
 
-		if claims.TenantID != tenant.ID.String() {
+		userID, err := uuid.Parse(claims.UserID)
+		if err != nil {
+			http.Error(w, "Invalid user ID in claims", http.StatusUnauthorized)
+			return
+		}
+
+		isOwner, err := s.db.IsTenantOwner(r.Context(), db.IsTenantOwnerParams{
+			TenantID: tenant.ID,
+			UserID:   userID,
+		})
+		if err != nil {
+			http.Error(w, "Error checking permissions", http.StatusInternalServerError)
+			return
+		}
+
+		if !isOwner {
 			http.Error(w, "Forbidden: Access denied to this tenant", http.StatusForbidden)
 			return
 		}

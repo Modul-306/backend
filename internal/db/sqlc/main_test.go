@@ -21,12 +21,25 @@ var testDB *sql.DB
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
+	migrationsDir := filepath.Join("..", "..", "..", "migrations")
+	files, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		log.Fatalf("failed to read migrations directory: %s", err)
+	}
+
+	var initScripts []string
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".sql" && (len(file.Name()) > 6 && file.Name()[len(file.Name())-6:] == "up.sql") {
+			initScripts = append(initScripts, filepath.Join(migrationsDir, file.Name()))
+		}
+	}
+
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:15-alpine",
 		postgres.WithDatabase("cattlehof"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
-		postgres.WithInitScripts(filepath.Join("..", "..", "..", "migrations", "000001_init_schema.up.sql")),
+		postgres.WithInitScripts(initScripts...),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).

@@ -87,11 +87,66 @@ FROM order_items oi
 JOIN products p ON oi.product_id = p.id
 WHERE oi.order_id = $1;
 
+-- name: GetRevenueByDay :many
+SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric) as revenue
+FROM orders
+WHERE tenant_id = $1 AND status = 'completed'
+GROUP BY day
+ORDER BY day DESC
+LIMIT 30;
+
+-- name: GetTopSellingProducts :many
+SELECT p.id, p.name, SUM(oi.quantity) as total_sold
+FROM order_items oi
+JOIN products p ON oi.product_id = p.id
+JOIN orders o ON oi.order_id = o.id
+WHERE o.tenant_id = $1 AND o.status = 'completed'
+GROUP BY p.id, p.name
+ORDER BY total_sold DESC
+LIMIT 5;
+
+-- name: CreateReview :one
+INSERT INTO product_reviews (product_id, user_id, rating, comment)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
+-- name: ListReviewsByProduct :many
+SELECT pr.*, u.email as user_email
+FROM product_reviews pr
+JOIN users u ON pr.user_id = u.id
+WHERE pr.product_id = $1
+ORDER BY pr.created_at DESC;
+
+-- name: GetAverageRating :one
+SELECT AVG(rating)::float as avg_rating, COUNT(*)::int as review_count
+FROM product_reviews
+WHERE product_id = $1;
+
 -- name: UpdateOrderStatus :one
 UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING *;
 
 -- name: SetTenantOwner :one
 UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING *;
+
+-- name: AddTenantOwner :exec
+INSERT INTO tenant_owners (tenant_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveTenantOwner :exec
+DELETE FROM tenant_owners WHERE tenant_id = $1 AND user_id = $2;
+
+-- name: ListTenantOwners :many
+SELECT u.id, u.email, u.role
+FROM users u
+JOIN tenant_owners t_o ON u.id = t_o.user_id
+WHERE t_o.tenant_id = $1;
+
+-- name: IsTenantOwner :one
+SELECT EXISTS (
+    SELECT 1 FROM tenant_owners 
+    WHERE tenant_id = $1 AND user_id = $2
+);
 
 -- name: UpdateTenantAppearance :one
 UPDATE tenants SET cover_url = $2, description = $3 WHERE id = $1 RETURNING *;

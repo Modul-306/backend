@@ -78,7 +78,14 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/orders", s.handlePlaceOrder)
 				r.Get("/orders/my", s.handleListMyOrders)
 				r.Get("/orders/{id}", s.handleGetOrderDetails)
+				r.Post("/products/{id}/reviews", s.handleCreateReview)
 			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(s.TenantMiddleware)
+			r.Get("/products/{id}/reviews", s.handleListReviews)
+			r.Get("/products/{id}/reviews/stats", s.handleGetReviewStats)
 		})
 
 		// --- Global Admin Routes ---
@@ -101,11 +108,13 @@ func (s *Server) Routes() http.Handler {
 			
 			r.Put("/tenants/icon", s.handleUpdateTenantIcon)
 			r.Put("/tenants/appearance", s.handleUpdateTenantAppearance)
-			r.Get("/orders", s.handleListOrders) // List all orders for this tenant
+			r.Get("/orders", s.handleListOrders)
 			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
+			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
+			r.Get("/analytics/top-products", s.handleGetTopProducts)
 			
 			r.Group(func(r chi.Router) {
-				r.Use(s.RequireRole("farmer_admin", "platform_admin"))
+				r.Use(s.RequireRole("farmer_admin", "platform_admin", "staff"))
 				r.Post("/products", s.handleAddProduct)
 				r.Put("/products/{id}", s.handleUpdateProduct)
 				r.Delete("/products/{id}", s.handleDeleteProduct)
@@ -894,6 +903,181 @@ func (s *Server) handleSetTenantOwner(w http.ResponseWriter, r *http.Request) {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to set owner")
 		return
 	}
+
+	// Also add to tenant_owners table for compatibility
+	if ownerID.Valid {
+		_ = s.db.AddTenantOwner(r.Context(), db.AddTenantOwnerParams{
+			TenantID: id,
+			UserID:   ownerID.UUID,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tenant)
+}
+
+func (s *Server) handleAddTenantOwner(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	tenantID, err := uuid.Parse(idStr)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid tenant ID")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
+		return
+	}
+
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+
+	err = s.db.AddTenantOwner(r.Context(), db.AddTenantOwnerParams{
+		TenantID: tenantID,
+		UserID:   userID,
+	})
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to add owner")
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *Server) handleRemoveTenantOwner(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid tenant ID")
+		return
+	}
+
+	userID, err := uuid.Parse(chi.URLParam(r, "userID"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+
+	err = s.db.RemoveTenantOwner(r.Context(), db.RemoveTenantOwnerParams{
+		TenantID: tenantID,
+		UserID:   userID,
+	})
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to remove owner")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleListTenantOwners(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid tenant ID")
+		return
+	}
+
+	owners, err := s.db.ListTenantOwners(r.Context(), tenantID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list owners")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(owners)
+}
+
+func (s *Server) handleGetRevenueAnalytics(w http.ResponseWriter, r *http.Request) {
+	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
+	revenue, err := s.db.GetRevenueByDay(r.Context(), tenant.ID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch analytics")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(revenue)
+}
+
+func (s *Server) handleGetTopProducts(w http.ResponseWriter, r *http.Request) {
+	tenant := r.Context().Value(TenantContextKey).(db.Tenant)
+	products, err := s.db.GetTopSellingProducts(r.Context(), tenant.ID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch top products")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(products)
+}
+
+func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
+	productID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid product ID")
+		return
+	}
+
+	claims := r.Context().Value(UserContextKey).(UserClaims)
+	userID, _ := uuid.Parse(claims.UserID)
+
+	var req struct {
+		Rating  int32  `json:"rating"`
+		Comment string `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
+		return
+	}
+
+	review, err := s.db.CreateReview(r.Context(), db.CreateReviewParams{
+		ProductID: productID,
+		UserID:    userID,
+		Rating:    req.Rating,
+		Comment:   sql.NullString{String: req.Comment, Valid: req.Comment != ""},
+	})
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create review")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(review)
+}
+
+func (s *Server) handleListReviews(w http.ResponseWriter, r *http.Request) {
+	productID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid product ID")
+		return
+	}
+
+	reviews, err := s.db.ListReviewsByProduct(r.Context(), productID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list reviews")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reviews)
+}
+
+func (s *Server) handleGetReviewStats(w http.ResponseWriter, r *http.Request) {
+	productID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid product ID")
+		return
+	}
+
+	stats, err := s.db.GetAverageRating(r.Context(), productID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to get review stats")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
