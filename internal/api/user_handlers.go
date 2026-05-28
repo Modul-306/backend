@@ -30,6 +30,56 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(UserContextKey).(UserClaims)
+	userID, _ := uuid.Parse(claims.UserID)
+	
+	user, err := s.db.GetUserByID(r.Context(), userID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusNotFound, "User not found")
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":         user.ID,
+		"email":      user.Email,
+		"full_name":  user.FullName.String,
+		"address":    user.Address.String,
+		"role":       user.Role,
+		"created_at": user.CreatedAt,
+	})
+}
+
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(UserContextKey).(UserClaims)
+	userID, _ := uuid.Parse(claims.UserID)
+	
+	var req struct {
+		FullName string `json:"full_name"`
+		Address  string `json:"address"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
+		return
+	}
+	
+	arg := db.UpdateUserProfileParams{
+		ID:       userID,
+		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
+		Address:  sql.NullString{String: req.Address, Valid: req.Address != ""},
+	}
+	
+	user, err := s.db.UpdateUserProfile(r.Context(), arg)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to update profile")
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
 func (s *Server) handleGetUserLoyalty(w http.ResponseWriter, r *http.Request) {
 	claims := r.Context().Value(UserContextKey).(UserClaims)
 	userID, _ := uuid.Parse(claims.UserID)
