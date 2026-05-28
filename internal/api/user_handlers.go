@@ -1,9 +1,11 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 
+	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/google/uuid"
 )
 
