@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN full_name TEXT;
+ALTER TABLE users ADD COLUMN address TEXT;

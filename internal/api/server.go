@@ -71,6 +71,8 @@ func (s *Server) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.JWTMiddleware)
 			r.Get("/auth/me", s.handleMe)
+			r.Get("/auth/profile", s.handleGetProfile)
+			r.Put("/auth/profile", s.handleUpdateProfile)
 			r.Post("/upload", s.handleUpload)
 			
 			r.Group(func(r chi.Router) {
