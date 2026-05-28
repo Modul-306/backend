@@ -88,5 +88,7 @@ type User struct {
 	CreatedAt    sql.NullTime   `json:"created_at"`
 	LoyaltyTier  sql.NullString `json:"loyalty_tier"`
 	FullName     sql.NullString `json:"full_name"`
-	Address      sql.NullString `json:"address"`
+	Street       sql.NullString `json:"street"`
+	ZipCode      sql.NullString `json:"zip_code"`
+	City         sql.NullString `json:"city"`
 }
