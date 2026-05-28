@@ -78,10 +78,12 @@ func (s *Server) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.TenantMiddleware)
 				r.Post("/orders", s.handlePlaceOrder)
+				r.Get("/orders/my", s.handleListMyOrders)
+				r.Get("/orders/{id}", s.handleGetOrderDetails)
 				r.Post("/products/{id}/reviews", s.handleCreateReview)
+				r.Get("/loyalty", s.handleGetUserLoyalty)
+				r.Get("/categories", s.handleListCategories)
 			})
-			r.Get("/orders/my", s.handleListMyOrders)
-			r.Get("/orders/{id}", s.handleGetOrderDetails)
 		})
 
 		r.Group(func(r chi.Router) {
@@ -117,18 +119,6 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
 			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
 			r.Get("/analytics/top-products", s.handleGetTopProducts)
-			r.Get("/categories", s.handleListCategories)
-			r.Get("/loyalty", s.handleGetUserLoyalty)
-			
-			r.Group(func(r chi.Router) {
-				r.Use(s.RequireRole("farmer_admin", "platform_admin", "staff"))
-				r.Post("/products", s.handleAddProduct)
-				r.Put("/products/{id}", s.handleUpdateProduct)
-				r.Delete("/products/{id}", s.handleDeleteProduct)
-				r.Post("/blogs", s.handleCreateBlog)
-				r.Put("/blogs/{id}", s.handleUpdateBlog)
-				r.Delete("/blogs/{id}", s.handleDeleteBlog)
-			})
 		})
 	})
 
