@@ -54,6 +54,7 @@ type Querier interface {
 	UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAppearanceParams) (Tenant, error)
 	UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconParams) (Tenant, error)
 	UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyaltyTierParams) (User, error)
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 
