@@ -47,7 +47,9 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 		"id":         user.ID,
 		"email":      user.Email,
 		"full_name":  user.FullName.String,
-		"address":    user.Address.String,
+		"street":     user.Street.String,
+		"zip_code":   user.ZipCode.String,
+		"city":       user.City.String,
 		"role":       user.Role,
 		"created_at": user.CreatedAt,
 	})
@@ -59,7 +61,9 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	
 	var req struct {
 		FullName string `json:"full_name"`
-		Address  string `json:"address"`
+		Street   string `json:"street"`
+		ZipCode  string `json:"zip_code"`
+		City     string `json:"city"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
@@ -69,7 +73,9 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	arg := db.UpdateUserProfileParams{
 		ID:       userID,
 		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
-		Address:  sql.NullString{String: req.Address, Valid: req.Address != ""},
+		Street:   sql.NullString{String: req.Street, Valid: req.Street != ""},
+		ZipCode:  sql.NullString{String: req.ZipCode, Valid: req.ZipCode != ""},
+		City:     sql.NullString{String: req.City, Valid: req.City != ""},
 	}
 	
 	user, err := s.db.UpdateUserProfile(r.Context(), arg)

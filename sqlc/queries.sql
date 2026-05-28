@@ -186,7 +186,7 @@ SELECT * FROM users WHERE id = $1 LIMIT 1;
 UPDATE users SET role = $2 WHERE id = $1 RETURNING *;
 
 -- name: UpdateUserProfile :one
-UPDATE users SET full_name = $2, address = $3 WHERE id = $1 RETURNING *;
+UPDATE users SET full_name = $2, street = $3, zip_code = $4, city = $5 WHERE id = $1 RETURNING *;
 
 -- name: ListUsers :many
 SELECT * FROM users ORDER BY created_at DESC;
