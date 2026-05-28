@@ -111,6 +111,13 @@ func (s *Server) RequireTenantAccess(next http.Handler) http.Handler {
 			return
 		}
 
+		// Priority fallback: Allow if user explicitly belongs to this tenant via their primary association
+		// and has an authorized management role (admin or staff).
+		if claims.TenantID == tenant.ID.String() && (claims.Role == "farmer_admin" || claims.Role == "staff") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		userID, err := uuid.Parse(claims.UserID)
 		if err != nil {
 			http.Error(w, "Invalid user ID in claims", http.StatusUnauthorized)
