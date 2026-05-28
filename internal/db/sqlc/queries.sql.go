@@ -395,7 +395,7 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 }
 
 const getRevenueByDay = `-- name: GetRevenueByDay :many
-SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric) as revenue
+SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric)::text as revenue
 FROM orders
 WHERE tenant_id = $1 AND status = 'completed'
 GROUP BY day
@@ -405,7 +405,7 @@ LIMIT 30
 
 type GetRevenueByDayRow struct {
 	Day     time.Time `json:"day"`
-	Revenue int64     `json:"revenue"`
+	Revenue string    `json:"revenue"`
 }
 
 func (q *Queries) GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]GetRevenueByDayRow, error) {

@@ -94,8 +94,12 @@ func (s *Server) handleGetUserLoyalty(w http.ResponseWriter, r *http.Request) {
 	
 	discount, err := s.db.GetUserDiscount(r.Context(), userID)
 	if err != nil {
-		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch loyalty info")
-		return
+		if err == sql.ErrNoRows {
+			discount = "0.00"
+		} else {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch loyalty info")
+			return
+		}
 	}
 	
 	user, _ := s.db.GetUserByID(r.Context(), userID)

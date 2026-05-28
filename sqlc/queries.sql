@@ -120,7 +120,7 @@ JOIN products p ON oi.product_id = p.id
 WHERE oi.order_id = $1;
 
 -- name: GetRevenueByDay :many
-SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric) as revenue
+SELECT date_trunc('day', created_at)::date as day, SUM(total_amount::numeric)::text as revenue
 FROM orders
 WHERE tenant_id = $1 AND status = 'completed'
 GROUP BY day
