@@ -221,7 +221,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (tenant_id, email, password_hash, role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
+RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address
 `
 
 type CreateUserParams struct {
@@ -247,6 +247,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.CreatedAt,
 		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
 	)
 	return i, err
 }
@@ -489,7 +491,7 @@ func (q *Queries) GetTopSellingProducts(ctx context.Context, tenantID uuid.UUID)
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users WHERE email = $1 LIMIT 1
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address FROM users WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -503,12 +505,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Role,
 		&i.CreatedAt,
 		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users WHERE id = $1 LIMIT 1
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -522,6 +526,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Role,
 		&i.CreatedAt,
 		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
 	)
 	return i, err
 }
@@ -892,7 +898,7 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier FROM users ORDER BY created_at DESC
+SELECT id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -912,6 +918,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.CreatedAt,
 			&i.LoyaltyTier,
+			&i.FullName,
+			&i.Address,
 		); err != nil {
 			return nil, err
 		}
@@ -1176,7 +1184,7 @@ func (q *Queries) UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconPara
 }
 
 const updateUserLoyaltyTier = `-- name: UpdateUserLoyaltyTier :one
-UPDATE users SET loyalty_tier = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
+UPDATE users SET loyalty_tier = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address
 `
 
 type UpdateUserLoyaltyTierParams struct {
@@ -1195,12 +1203,14 @@ func (q *Queries) UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyal
 		&i.Role,
 		&i.CreatedAt,
 		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
 	)
 	return i, err
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address
 `
 
 type UpdateUserRoleParams struct {
@@ -1219,6 +1229,35 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.Role,
 		&i.CreatedAt,
 		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
+	)
+	return i, err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users SET full_name = $2, address = $3 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, address
+`
+
+type UpdateUserProfileParams struct {
+	ID       uuid.UUID      `json:"id"`
+	FullName sql.NullString `json:"full_name"`
+	Address  sql.NullString `json:"address"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserProfileStmt, updateUserProfile, arg.ID, arg.FullName, arg.Address)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.CreatedAt,
+		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Address,
 	)
 	return i, err
 }

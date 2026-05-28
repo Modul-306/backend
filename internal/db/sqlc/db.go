@@ -150,6 +150,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateUserLoyaltyTierStmt, err = db.PrepareContext(ctx, updateUserLoyaltyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserLoyaltyTier: %w", err)
 	}
+	if q.updateUserProfileStmt, err = db.PrepareContext(ctx, updateUserProfile); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserProfile: %w", err)
+	}
 	if q.updateUserRoleStmt, err = db.PrepareContext(ctx, updateUserRole); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserRole: %w", err)
 	}
@@ -368,6 +371,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserLoyaltyTierStmt: %w", cerr)
 		}
 	}
+	if q.updateUserProfileStmt != nil {
+		if cerr := q.updateUserProfileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserProfileStmt: %w", cerr)
+		}
+	}
 	if q.updateUserRoleStmt != nil {
 		if cerr := q.updateUserRoleStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserRoleStmt: %w", cerr)
@@ -452,10 +460,11 @@ type Queries struct {
 	updateProductStockStmt     *sql.Stmt
 	updateTenantStmt           *sql.Stmt
 	updateTenantAppearanceStmt *sql.Stmt
-	updateTenantIconStmt       *sql.Stmt
-	updateUserLoyaltyTierStmt  *sql.Stmt
-	updateUserRoleStmt         *sql.Stmt
-}
+	updateTenantIcon       *sql.Stmt
+	updateUserLoyaltyTier  *sql.Stmt
+	updateUserProfileStmt  *sql.Stmt
+	updateUserRoleStmt     *sql.Stmt
+	}
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
@@ -503,6 +512,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateTenantAppearanceStmt: q.updateTenantAppearanceStmt,
 		updateTenantIconStmt:       q.updateTenantIconStmt,
 		updateUserLoyaltyTierStmt:  q.updateUserLoyaltyTierStmt,
+		updateUserProfileStmt:      q.updateUserProfileStmt,
 		updateUserRoleStmt:         q.updateUserRoleStmt,
 	}
 }
