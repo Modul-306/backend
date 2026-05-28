@@ -53,13 +53,14 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		// --- Public Routes ---
 		r.Post("/auth/login", s.handleLogin)
-		r.Post("/auth/register", s.handleRegister)
 		r.Get("/tenants", s.handleListTenants)
 		r.Get("/tenants/{slug}", s.handleGetTenant) // Moved out of middleware
+		r.Get("/tenants/{id}/owners", s.handleListTenantOwners)
 		r.Get("/tenants/categories", s.handleListTenantCategories)
 		
 		r.Group(func(r chi.Router) {
 			r.Use(s.TenantMiddleware)
+			r.Post("/auth/register", s.handleRegister)
 			r.Get("/products", s.handleListProducts)
 			r.Get("/categories", s.handleListCategories)
 			r.Get("/blogs", s.handleListBlogs)
@@ -98,7 +99,6 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/tenants/{id}/owner", s.handleSetTenantOwner)
 			r.Post("/tenants/{id}/owners", s.handleAddTenantOwner)
 			r.Delete("/tenants/{id}/owners/{userID}", s.handleRemoveTenantOwner)
-			r.Get("/tenants/{id}/owners", s.handleListTenantOwners)
 			r.Delete("/tenants/{id}", s.handleDeleteTenant)
 			r.Get("/users", s.handleListUsers)
 		})
