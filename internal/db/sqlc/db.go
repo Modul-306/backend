@@ -460,11 +460,11 @@ type Queries struct {
 	updateProductStockStmt     *sql.Stmt
 	updateTenantStmt           *sql.Stmt
 	updateTenantAppearanceStmt *sql.Stmt
-	updateTenantIcon       *sql.Stmt
-	updateUserLoyaltyTier  *sql.Stmt
-	updateUserProfileStmt  *sql.Stmt
-	updateUserRoleStmt     *sql.Stmt
-	}
+	updateTenantIconStmt       *sql.Stmt
+	updateUserLoyaltyTierStmt  *sql.Stmt
+	updateUserProfileStmt      *sql.Stmt
+	updateUserRoleStmt         *sql.Stmt
+}
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
