@@ -40,11 +40,26 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenant, _ := r.Context().Value(TenantContextKey).(db.Tenant)
+	
+	role := "customer"
+	tenantID := uuid.NullUUID{}
+	
+	if tenant.ID != uuid.Nil {
+		tenantID = uuid.NullUUID{UUID: tenant.ID, Valid: true}
+		
+		// If tenant has no owners, first registrant becomes farmer_admin
+		owners, err := s.db.ListTenantOwners(r.Context(), tenant.ID)
+		if err == nil && len(owners) == 0 {
+			role = "farmer_admin"
+		}
+	}
+
 	arg := db.CreateUserParams{
-		TenantID:     uuid.NullUUID{},
+		TenantID:     tenantID,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         "customer",
+		Role:         role,
 	}
 
 	user, err := s.db.CreateUser(r.Context(), arg)
@@ -55,6 +70,14 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create user")
 		return
+	}
+
+	// If they became farmer_admin, also add to tenant_owners table
+	if role == "farmer_admin" && tenant.ID != uuid.Nil {
+		_ = s.db.AddTenantOwner(r.Context(), db.AddTenantOwnerParams{
+			TenantID: tenant.ID,
+			UserID:   user.ID,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

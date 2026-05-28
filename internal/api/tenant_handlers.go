@@ -226,12 +226,21 @@ func (s *Server) handleSetTenantOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Also add to tenant_owners table for compatibility
+	// Also add to tenant_owners table for compatibility and promote role
 	if ownerID.Valid {
 		_ = s.db.AddTenantOwner(r.Context(), db.AddTenantOwnerParams{
 			TenantID: id,
 			UserID:   ownerID.UUID,
 		})
+		
+		// Promote user to farmer_admin if they aren't platform_admin
+		u, err := s.db.GetUserByID(r.Context(), ownerID.UUID)
+		if err == nil && u.Role == "customer" {
+			_, _ = s.db.UpdateUserRole(r.Context(), db.UpdateUserRoleParams{
+				ID:   ownerID.UUID,
+				Role: "farmer_admin",
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -267,6 +276,15 @@ func (s *Server) handleAddTenantOwner(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to add owner")
 		return
+	}
+	
+	// Promote user to farmer_admin if they aren't platform_admin
+	u, err := s.db.GetUserByID(r.Context(), userID)
+	if err == nil && u.Role == "customer" {
+		_, _ = s.db.UpdateUserRole(r.Context(), db.UpdateUserRoleParams{
+			ID:   userID,
+			Role: "farmer_admin",
+		})
 	}
 
 	w.WriteHeader(http.StatusCreated)
