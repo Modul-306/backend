@@ -184,11 +184,43 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 		s.errorResponse(w, r, http.StatusNotFound, "Tenant not found")
 		return
 	}
-	orders, err := s.db.ListOrdersByTenant(r.Context(), tenant.ID)
+
+	rows, err := s.conn.QueryContext(r.Context(), `
+		SELECT o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, 
+			   u.full_name, u.email, u.street, u.zip_code, u.city
+		FROM orders o
+		JOIN users u ON o.user_id = u.id
+		WHERE o.tenant_id = $1 
+		ORDER BY o.created_at DESC`, tenant.ID)
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to list orders")
 		return
 	}
+	defer rows.Close()
+
+	type orderWithUser struct {
+		db.Order
+		FullName sql.NullString `json:"full_name"`
+		Email    string         `json:"email"`
+		Street   sql.NullString `json:"street"`
+		ZipCode  sql.NullString `json:"zip_code"`
+		City     sql.NullString `json:"city"`
+	}
+
+	var orders []orderWithUser
+	for rows.Next() {
+		var i orderWithUser
+		err := rows.Scan(
+			&i.ID, &i.TenantID, &i.UserID, &i.Status, &i.TotalAmount, &i.CreatedAt,
+			&i.FullName, &i.Email, &i.Street, &i.ZipCode, &i.City,
+		)
+		if err != nil {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to scan order")
+			return
+		}
+		orders = append(orders, i)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(orders)
 }
