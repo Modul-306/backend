@@ -78,10 +78,10 @@ func (s *Server) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.TenantMiddleware)
 				r.Post("/orders", s.handlePlaceOrder)
-				r.Get("/orders/my", s.handleListMyOrders)
-				r.Get("/orders/{id}", s.handleGetOrderDetails)
 				r.Post("/products/{id}/reviews", s.handleCreateReview)
 			})
+			r.Get("/orders/my", s.handleListMyOrders)
+			r.Get("/orders/{id}", s.handleGetOrderDetails)
 		})
 
 		r.Group(func(r chi.Router) {

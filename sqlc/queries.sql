@@ -104,7 +104,11 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListOrdersByTenant :many
-SELECT * FROM orders WHERE tenant_id = $1 ORDER BY created_at DESC;
+SELECT o.*, u.full_name, u.email, u.street, u.zip_code, u.city
+FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE o.tenant_id = $1 
+ORDER BY o.created_at DESC;
 
 -- name: ListOrdersByUser :many
 SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC;
