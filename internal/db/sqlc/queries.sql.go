@@ -632,18 +632,36 @@ func (q *Queries) ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql
 }
 
 const listOrdersByTenant = `-- name: ListOrdersByTenant :many
-SELECT id, tenant_id, user_id, status, total_amount, created_at FROM orders WHERE tenant_id = $1 ORDER BY created_at DESC
+SELECT o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, u.full_name, u.email, u.street, u.zip_code, u.city
+FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE o.tenant_id = $1 
+ORDER BY o.created_at DESC
 `
 
-func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]Order, error) {
+type ListOrdersByTenantRow struct {
+	ID          uuid.UUID      `json:"id"`
+	TenantID    uuid.UUID      `json:"tenant_id"`
+	UserID      uuid.UUID      `json:"user_id"`
+	Status      string         `json:"status"`
+	TotalAmount string         `json:"total_amount"`
+	CreatedAt   sql.NullTime   `json:"created_at"`
+	FullName    sql.NullString `json:"full_name"`
+	Email       string         `json:"email"`
+	Street      sql.NullString `json:"street"`
+	ZipCode     sql.NullString `json:"zip_code"`
+	City        sql.NullString `json:"city"`
+}
+
+func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]ListOrdersByTenantRow, error) {
 	rows, err := q.query(ctx, q.listOrdersByTenantStmt, listOrdersByTenant, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Order
+	var items []ListOrdersByTenantRow
 	for rows.Next() {
-		var i Order
+		var i ListOrdersByTenantRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TenantID,
@@ -651,6 +669,11 @@ func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([
 			&i.Status,
 			&i.TotalAmount,
 			&i.CreatedAt,
+			&i.FullName,
+			&i.Email,
+			&i.Street,
+			&i.ZipCode,
+			&i.City,
 		); err != nil {
 			return nil, err
 		}
@@ -925,7 +948,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.LoyaltyTier,
 			&i.FullName,
-			&i.Address,
+			&i.Street,
+			&i.ZipCode,
+			&i.City,
 		); err != nil {
 			return nil, err
 		}
@@ -1217,34 +1242,6 @@ func (q *Queries) UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyal
 	return i, err
 }
 
-const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, street, zip_code, city
-`
-
-type UpdateUserRoleParams struct {
-	ID   uuid.UUID `json:"id"`
-	Role string    `json:"role"`
-}
-
-func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
-	row := q.queryRow(ctx, q.updateUserRoleStmt, updateUserRole, arg.ID, arg.Role)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.TenantID,
-		&i.Email,
-		&i.PasswordHash,
-		&i.Role,
-		&i.CreatedAt,
-		&i.LoyaltyTier,
-		&i.FullName,
-		&i.Street,
-		&i.ZipCode,
-		&i.City,
-	)
-	return i, err
-}
-
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users SET full_name = $2, street = $3, zip_code = $4, city = $5 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, street, zip_code, city
 `
@@ -1265,6 +1262,34 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.ZipCode,
 		arg.City,
 	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.CreatedAt,
+		&i.LoyaltyTier,
+		&i.FullName,
+		&i.Street,
+		&i.ZipCode,
+		&i.City,
+	)
+	return i, err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, tenant_id, email, password_hash, role, created_at, loyalty_tier, full_name, street, zip_code, city
+`
+
+type UpdateUserRoleParams struct {
+	ID   uuid.UUID `json:"id"`
+	Role string    `json:"role"`
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserRoleStmt, updateUserRole, arg.ID, arg.Role)
 	var i User
 	err := row.Scan(
 		&i.ID,
