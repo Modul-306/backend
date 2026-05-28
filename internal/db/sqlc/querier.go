@@ -36,7 +36,7 @@ type Querier interface {
 	IsTenantOwner(ctx context.Context, arg IsTenantOwnerParams) (bool, error)
 	ListBlogs(ctx context.Context, tenantID uuid.UUID) ([]Blog, error)
 	ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql.NullString, error)
-	ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]Order, error)
+	ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]ListOrdersByTenantRow, error)
 	ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error)
 	ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error)
 	ListReviewsByProduct(ctx context.Context, productID uuid.UUID) ([]ListReviewsByProductRow, error)
