@@ -168,6 +168,7 @@ func (s *Server) handleUpdateTenantAppearance(w http.ResponseWriter, r *http.Req
 	var req struct {
 		CoverUrl    string `json:"cover_url"`
 		Description string `json:"description"`
+		Category    string `json:"category"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -179,6 +180,7 @@ func (s *Server) handleUpdateTenantAppearance(w http.ResponseWriter, r *http.Req
 		ID:          tenant.ID,
 		CoverUrl:    sql.NullString{String: req.CoverUrl, Valid: req.CoverUrl != ""},
 		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Category:    sql.NullString{String: req.Category, Valid: req.Category != ""},
 	}
 
 	updatedTenant, err := s.db.UpdateTenantAppearance(r.Context(), arg)
