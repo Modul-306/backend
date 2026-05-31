@@ -30,6 +30,20 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify user has filled in their address in their profile
+	userProfile, err := s.db.GetUserByID(r.Context(), userID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to retrieve user profile")
+		return
+	}
+
+	if !userProfile.Street.Valid || userProfile.Street.String == "" ||
+		!userProfile.ZipCode.Valid || userProfile.ZipCode.String == "" ||
+		!userProfile.City.Valid || userProfile.City.String == "" {
+		s.errorResponse(w, r, http.StatusBadRequest, "Please set your full delivery address in your profile before placing an order")
+		return
+	}
+
 	var req placeOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
@@ -153,6 +167,29 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to commit transaction")
 		return
+	}
+
+	// Recalculate and update user loyalty tier based on number of orders placed
+	userOrders, err := s.db.ListOrdersByUser(r.Context(), userID)
+	if err == nil {
+		orderCount := len(userOrders)
+		var newTier string
+		if orderCount >= 20 {
+			newTier = "Harvest Elite"
+		} else if orderCount >= 10 {
+			newTier = "Harvester"
+		} else if orderCount >= 3 {
+			newTier = "Sprout"
+		} else {
+			newTier = "Seedling"
+		}
+
+		if userProfile.LoyaltyTier.String != newTier {
+			_, _ = s.db.UpdateUserLoyaltyTier(r.Context(), db.UpdateUserLoyaltyTierParams{
+				ID:          userID,
+				LoyaltyTier: sql.NullString{String: newTier, Valid: true},
+			})
+		}
 	}
 
 	// Post-commit: Send notifications (non-blocking or at least outside tx)
