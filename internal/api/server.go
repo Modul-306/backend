@@ -74,14 +74,14 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/auth/profile", s.handleGetProfile)
 			r.Put("/auth/profile", s.handleUpdateProfile)
 			r.Post("/upload", s.handleUpload)
+			r.Get("/orders/my", s.handleListMyOrders)
+			r.Get("/orders/{id}", s.handleGetOrderDetails)
+			r.Get("/loyalty", s.handleGetUserLoyalty)
 			
 			r.Group(func(r chi.Router) {
 				r.Use(s.TenantMiddleware)
 				r.Post("/orders", s.handlePlaceOrder)
-				r.Get("/orders/my", s.handleListMyOrders)
-				r.Get("/orders/{id}", s.handleGetOrderDetails)
 				r.Post("/products/{id}/reviews", s.handleCreateReview)
-				r.Get("/loyalty", s.handleGetUserLoyalty)
 				r.Get("/categories", s.handleListCategories)
 			})
 		})
