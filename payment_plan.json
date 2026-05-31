@@ -1,0 +1,92 @@
+{
+  "project": "Cattlehof Network Payment Integration Plan",
+  "recommended_provider": "Stripe",
+  "implementation_type": "Stripe Checkout (Hosted Payment Page)",
+  "required_environment_variables": {
+    "backend": {
+      "STRIPE_SECRET_KEY": {
+        "description": "Secret API key used to authenticate server-side requests to Stripe",
+        "example": "sk_test_51...your_secret_key"
+      },
+      "STRIPE_WEBHOOK_SECRET": {
+        "description": "Signing secret used to verify Stripe webhook signatures to guarantee authenticity",
+        "example": "whsec_...your_webhook_secret"
+      },
+      "FRONTEND_URL": {
+        "description": "Base URL of the frontend client app, used for Success and Cancel redirects",
+        "example": "http://localhost:3000"
+      }
+    },
+    "frontend": {
+      "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": {
+        "description": "Publishable key for client-side Stripe interactions (if using Stripe Elements/SDK)",
+        "example": "pk_test_51...your_publishable_key"
+      }
+    }
+  },
+  "database_migrations": [
+    {
+      "file": "backend/migrations/000013_add_payment_details.up.sql",
+      "description": "Extend the orders table to support payment states and tracking IDs.",
+      "sql_statements": [
+        "ALTER TABLE orders DROP CONSTRAINT orders_status_check;",
+        "ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending', 'pending_payment', 'completed', 'cancelled'));",
+        "ALTER TABLE orders ADD COLUMN stripe_session_id TEXT UNIQUE;",
+        "ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid';"
+      ]
+    }
+  ],
+  "payment_flow_steps": [
+    "User adds items to cart and clicks 'Complete Purchase' on the storefront.",
+    "Frontend makes an authenticated request: POST /api/v1/payments/checkout-session with cart items.",
+    "Backend validates item stock and prices, applies user loyalty discounts, and calls Stripe API to create a Checkout Session.",
+    "Backend stores the order in the database with status = 'pending_payment' and records the Stripe session ID.",
+    "Backend returns the Stripe Checkout URL to the frontend.",
+    "Frontend redirects the user's browser directly to the secure Stripe payment page.",
+    "User enters card details and completes payment. Stripe handles 3D Secure / multi-factor checks.",
+    "Stripe redirects user back to our frontend at [slug]/checkout/success. The basket is cleared.",
+    "Stripe sends an asynchronous Webhook notification (checkout.session.completed) containing the session ID to the backend.",
+    "Backend verifies the signature of the webhook, retrieves the order via the session ID, commits the stock updates, sets order status = 'completed', and fires order confirmation email."
+  ],
+  "files_to_be_added_or_modified": {
+    "backend": [
+      {
+        "path": "backend/internal/api/payment_handlers.go",
+        "action": "NEW",
+        "description": "Implement handleCreateCheckoutSession and handleStripeWebhook endpoints."
+      },
+      {
+        "path": "backend/internal/api/server.go",
+        "action": "MODIFY",
+        "description": "Register payment routes (/payments/checkout-session, /payments/webhook) in the chi router."
+      },
+      {
+        "path": "backend/cmd/main.go",
+        "action": "MODIFY",
+        "description": "Initialize the Stripe SDK with the secret API key from environment variables."
+      },
+      {
+        "path": "backend/.env.example",
+        "action": "MODIFY",
+        "description": "Add placeholders for STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and FRONTEND_URL."
+      }
+    },
+    "frontend": [
+      {
+        "path": "frontend/src/app/[slug]/checkout/success/page.tsx",
+        "action": "NEW",
+        "description": "Create a landing page for successful checkouts showing order confirmation."
+      },
+      {
+        "path": "frontend/src/app/[slug]/checkout/cancel/page.tsx",
+        "action": "NEW",
+        "description": "Create a landing page for cancelled or failed checkouts allowing users to retry."
+      },
+      {
+        "path": "frontend/src/components/Shop.tsx",
+        "action": "MODIFY",
+        "description": "Update the handleCheckout function to request the checkout session URL and redirect the user."
+      }
+    ]
+  }
+}
