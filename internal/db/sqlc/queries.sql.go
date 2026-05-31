@@ -1162,17 +1162,23 @@ func (q *Queries) UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Ten
 }
 
 const updateTenantAppearance = `-- name: UpdateTenantAppearance :one
-UPDATE tenants SET cover_url = $2, description = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+UPDATE tenants SET cover_url = $2, description = $3, category = $4 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
 `
 
 type UpdateTenantAppearanceParams struct {
 	ID          uuid.UUID      `json:"id"`
 	CoverUrl    sql.NullString `json:"cover_url"`
 	Description sql.NullString `json:"description"`
+	Category    sql.NullString `json:"category"`
 }
 
 func (q *Queries) UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAppearanceParams) (Tenant, error) {
-	row := q.queryRow(ctx, q.updateTenantAppearanceStmt, updateTenantAppearance, arg.ID, arg.CoverUrl, arg.Description)
+	row := q.queryRow(ctx, q.updateTenantAppearanceStmt, updateTenantAppearance,
+		arg.ID,
+		arg.CoverUrl,
+		arg.Description,
+		arg.Category,
+	)
 	var i Tenant
 	err := row.Scan(
 		&i.ID,
