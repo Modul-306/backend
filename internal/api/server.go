@@ -119,6 +119,16 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
 			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
 			r.Get("/analytics/top-products", s.handleGetTopProducts)
+
+			// Product management
+			r.Post("/products", s.handleAddProduct)
+			r.Put("/products/{id}", s.handleUpdateProduct)
+			r.Delete("/products/{id}", s.handleDeleteProduct)
+
+			// Blog management
+			r.Post("/blogs", s.handleCreateBlog)
+			r.Put("/blogs/{id}", s.handleUpdateBlog)
+			r.Delete("/blogs/{id}", s.handleDeleteBlog)
 		})
 	})
 
