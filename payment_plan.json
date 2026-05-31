@@ -1,7 +1,7 @@
 {
-  "project": "Cattlehof Network Payment Integration Plan",
+  "project": "Cattlehof Network Payment Integration Plan (Online & Cash Selection)",
   "recommended_provider": "Stripe",
-  "implementation_type": "Stripe Checkout (Hosted Payment Page)",
+  "implementation_type": "Stripe Checkout (Online) & Go Direct Checkout (Cash)",
   "required_environment_variables": {
     "backend": {
       "STRIPE_SECRET_KEY": {
@@ -26,66 +26,73 @@
   },
   "database_migrations": [
     {
-      "file": "backend/migrations/000013_add_payment_details.up.sql",
-      "description": "Extend the orders table to support payment states and tracking IDs.",
+      "file": "backend/migrations/000013_add_payment_and_tenant_settings.up.sql",
+      "description": "Extend tenants schema with payment toggles, and update order statuses.",
       "sql_statements": [
+        "ALTER TABLE tenants ADD COLUMN allows_online_payment BOOLEAN NOT NULL DEFAULT TRUE;",
+        "ALTER TABLE tenants ADD COLUMN allows_cash_payment BOOLEAN NOT NULL DEFAULT TRUE;",
         "ALTER TABLE orders DROP CONSTRAINT orders_status_check;",
         "ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending', 'pending_payment', 'completed', 'cancelled'));",
+        "ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('online', 'cash'));",
         "ALTER TABLE orders ADD COLUMN stripe_session_id TEXT UNIQUE;",
-        "ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid';"
+        "ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid';"
       ]
     }
   ],
   "payment_flow_steps": [
-    "User adds items to cart and clicks 'Complete Purchase' on the storefront.",
-    "Frontend makes an authenticated request: POST /api/v1/payments/checkout-session with cart items.",
-    "Backend validates item stock and prices, applies user loyalty discounts, and calls Stripe API to create a Checkout Session.",
-    "Backend stores the order in the database with status = 'pending_payment' and records the Stripe session ID.",
-    "Backend returns the Stripe Checkout URL to the frontend.",
-    "Frontend redirects the user's browser directly to the secure Stripe payment page.",
-    "User enters card details and completes payment. Stripe handles 3D Secure / multi-factor checks.",
-    "Stripe redirects user back to our frontend at [slug]/checkout/success. The basket is cleared.",
-    "Stripe sends an asynchronous Webhook notification (checkout.session.completed) containing the session ID to the backend.",
-    "Backend verifies the signature of the webhook, retrieves the order via the session ID, commits the stock updates, sets order status = 'completed', and fires order confirmation email."
+    "Customer adds items to cart on storefront.",
+    "Frontend checks tenant payment configuration: allows_online_payment and allows_cash_payment.",
+    "If both are enabled, frontend renders an selection menu in checkout for Card vs Cash. Otherwise, it defaults and hides selection.",
+    "Customer clicks 'Complete Purchase'.",
+    "Frontend makes request: POST /api/v1/orders with payload containing items and payment_method ('online' or 'cash').",
+    "Backend validates stock, recalculates prices and loyalty discounts, and retrieves tenant configuration.",
+    "If payment_method = 'cash': Backend asserts allows_cash_payment is true, transactionally saves order as status = 'pending', and returns the order object immediately.",
+    "If payment_method = 'online': Backend asserts allows_online_payment is true, transactionally saves order as status = 'pending_payment', calls Stripe to generate a Checkout Session, and returns the redirect stripe_url.",
+    "For online payments, frontend redirects user to Stripe hosted page, user pays, Stripe redirects to success page, and asynchronous webhook verifies signature, updates order to status = 'completed' and sets payment_status = 'paid'."
   ],
   "files_to_be_added_or_modified": {
     "backend": [
       {
+        "path": "backend/internal/api/order_handlers.go",
+        "action": "MODIFY",
+        "description": "Update handlePlaceOrder to parse payment_method, retrieve tenant flags, and branch transactionally between cash fulfillment and Stripe checkout generation."
+      },
+      {
         "path": "backend/internal/api/payment_handlers.go",
         "action": "NEW",
-        "description": "Implement handleCreateCheckoutSession and handleStripeWebhook endpoints."
+        "description": "Implement handleStripeWebhook to process completed or expired Stripe sessions."
+      },
+      {
+        "path": "backend/internal/api/tenant_handlers.go",
+        "action": "MODIFY",
+        "description": "Update handleUpdateTenantAppearance to support updating payment settings with guards ensuring at least one option is true."
       },
       {
         "path": "backend/internal/api/server.go",
         "action": "MODIFY",
-        "description": "Register payment routes (/payments/checkout-session, /payments/webhook) in the chi router."
+        "description": "Register payment webhook routes in the chi router."
       },
       {
         "path": "backend/cmd/main.go",
         "action": "MODIFY",
-        "description": "Initialize the Stripe SDK with the secret API key from environment variables."
+        "description": "Initialize the Stripe SDK with environment API keys."
       },
       {
         "path": "backend/.env.example",
         "action": "MODIFY",
-        "description": "Add placeholders for STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and FRONTEND_URL."
+        "description": "Add placeholders for Stripe secrets."
       }
     },
     "frontend": [
       {
-        "path": "frontend/src/app/[slug]/checkout/success/page.tsx",
-        "action": "NEW",
-        "description": "Create a landing page for successful checkouts showing order confirmation."
-      },
-      {
-        "path": "frontend/src/app/[slug]/checkout/cancel/page.tsx",
-        "action": "NEW",
-        "description": "Create a landing page for cancelled or failed checkouts allowing users to retry."
+        "path": "frontend/src/components/Admin.tsx",
+        "action": "MODIFY",
+        "description": "Add toggles / checkboxes for Online and Cash payment methods in the workbench settings form."
       },
       {
         "path": "frontend/src/components/Shop.tsx",
         "action": "MODIFY",
-        "description": "Update the handleCheckout function to request the checkout session URL and redirect the user."
+        "description": "Render payment selection UI if both options are active, and adjust checkout payload submission."
       }
     ]
   }
