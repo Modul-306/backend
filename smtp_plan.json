@@ -1,0 +1,74 @@
+{
+  "project": "Cattlehof Network Email Integration Plan",
+  "implementation_type": "SMTP (Option 1)",
+  "required_environment_variables": {
+    "SMTP_HOST": {
+      "description": "The hostname of the SMTP server",
+      "example": "smtp.protonmail.ch"
+    },
+    "SMTP_PORT": {
+      "description": "The port used for SMTP communication (typically 587 for STARTTLS or 465 for SSL/TLS)",
+      "example": "587"
+    },
+    "SMTP_USER": {
+      "description": "The username or token ID used to authenticate with the SMTP server",
+      "example": "your_smtp_token_username"
+    },
+    "SMTP_PASS": {
+      "description": "The password or API token used to authenticate with the SMTP server",
+      "example": "your_smtp_token_password"
+    },
+    "EMAIL_FROM": {
+      "description": "The sender email address displayed to recipients",
+      "example": "Cattlehof <noreply@yourdomain.ch>"
+    }
+  },
+  "proton_mail_setup_options": {
+    "production_env": {
+      "method": "Proton SMTP Submission (Paid/Business plans)",
+      "steps": [
+        "Log in to Proton Mail in browser.",
+        "Navigate to Settings -> All settings -> SMTP (or Admin Panel -> SMTP tokens).",
+        "Create an SMTP token, select custom domain, and generate credentials.",
+        "Update DNS records (SPF, DKIM, DMARC) at your domain registrar.",
+        "Set the generated credentials as environment variables in the production .env file."
+      ],
+      "credentials": {
+        "host": "smtp.protonmail.ch",
+        "port": 587,
+        "username_source": "SMTP Token ID",
+        "password_source": "SMTP Token Password"
+      }
+    },
+    "local_testing": {
+      "method": "Proton Mail Bridge (Paid plans)",
+      "steps": [
+        "Download and install Proton Mail Bridge on your local computer.",
+        "Log in to your Proton account inside the Bridge app.",
+        "Copy the locally generated port and password shown in the Bridge.",
+        "Run the Bridge in the background.",
+        "Configure local backend .env to point to localhost on the generated port."
+      ],
+      "credentials": {
+        "host": "127.0.0.1",
+        "port": "Dynamic port (e.g., 1025)",
+        "username_source": "Proton email address",
+        "password_source": "Locally generated bridge password"
+      }
+    }
+  },
+  "files_to_be_modified": [
+    {
+      "path": "backend/internal/api/notification.go",
+      "description": "Implement SmtpEmailService struct and SendEmail method matching NotificationService interface."
+    },
+    {
+      "path": "backend/cmd/main.go",
+      "description": "Read SMTP environment variables and conditionally instantiate SmtpEmailService or fallback to MockEmailService."
+    },
+    {
+      "path": "backend/.env.example",
+      "description": "Add placeholder variables for SMTP configurations to document requirements."
+    }
+  ]
+}
