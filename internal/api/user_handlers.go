@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/google/uuid"
@@ -92,6 +93,41 @@ func (s *Server) handleGetUserLoyalty(w http.ResponseWriter, r *http.Request) {
 	claims := r.Context().Value(UserContextKey).(UserClaims)
 	userID, _ := uuid.Parse(claims.UserID)
 	
+	user, err := s.db.GetUserByID(r.Context(), userID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to fetch user")
+		return
+	}
+
+	// Recalculate and update user loyalty tier based on number of orders placed in the last 365 days
+	userOrders, err := s.db.ListOrdersByUser(r.Context(), userID)
+	if err == nil {
+		orderCount := 0
+		oneYearAgo := time.Now().AddDate(-1, 0, 0)
+		for _, o := range userOrders {
+			if o.CreatedAt.Valid && o.CreatedAt.Time.After(oneYearAgo) {
+				orderCount++
+			}
+		}
+		var newTier string
+		if orderCount >= 20 {
+			newTier = "Harvest Elite"
+		} else if orderCount >= 10 {
+			newTier = "Harvester"
+		} else if orderCount >= 3 {
+			newTier = "Sprout"
+		} else {
+			newTier = "Seedling"
+		}
+
+		if user.LoyaltyTier.String != newTier {
+			user, _ = s.db.UpdateUserLoyaltyTier(r.Context(), db.UpdateUserLoyaltyTierParams{
+				ID:          userID,
+				LoyaltyTier: sql.NullString{String: newTier, Valid: true},
+			})
+		}
+	}
+
 	discount, err := s.db.GetUserDiscount(r.Context(), userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -102,11 +138,9 @@ func (s *Server) handleGetUserLoyalty(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	
-	user, _ := s.db.GetUserByID(r.Context(), userID)
-	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"tier": user.LoyaltyTier.String,
+		"tier":             user.LoyaltyTier.String,
 		"discount_percent": discount,
 	})
 }
