@@ -142,6 +142,57 @@ func (s *Server) RequireTenantAccess(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) RequireTenantAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(UserContextKey).(UserClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Platform admins can access any tenant
+		if claims.Role == "platform_admin" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tenant, ok := r.Context().Value(TenantContextKey).(db.Tenant)
+		if !ok {
+			http.Error(w, "Tenant context missing", http.StatusInternalServerError)
+			return
+		}
+
+		// Priority fallback: Allow if user explicitly belongs to this tenant via their primary association
+		// and has an authorized management role (farmer_admin). Staff is excluded here.
+		if claims.TenantID == tenant.ID.String() && claims.Role == "farmer_admin" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		userID, err := uuid.Parse(claims.UserID)
+		if err != nil {
+			http.Error(w, "Invalid user ID in claims", http.StatusUnauthorized)
+			return
+		}
+
+		isOwner, err := s.db.IsTenantOwner(r.Context(), db.IsTenantOwnerParams{
+			TenantID: tenant.ID,
+			UserID:   userID,
+		})
+		if err != nil {
+			http.Error(w, "Error checking permissions", http.StatusInternalServerError)
+			return
+		}
+
+		if !isOwner {
+			http.Error(w, "Forbidden: Access denied to this tenant", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) TenantMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Priority: Header (set by frontend based on URL path)

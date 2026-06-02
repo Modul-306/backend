@@ -150,7 +150,7 @@ WHERE pr.product_id = $1
 ORDER BY pr.created_at DESC;
 
 -- name: GetAverageRating :one
-SELECT AVG(rating)::float as avg_rating, COUNT(*)::int as review_count
+SELECT COALESCE(AVG(rating), 0.0)::float as avg_rating, COUNT(*)::int as review_count
 FROM product_reviews
 WHERE product_id = $1;
 
