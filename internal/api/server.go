@@ -107,17 +107,25 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/users", s.handleListUsers)
 		})
 
-		// --- Tenant Management Routes (Owner/Platform Admin only) ---
+		// --- Tenant Admin-Only Routes (Owner/Platform Admin only) ---
 		r.Group(func(r chi.Router) {
 			r.Use(s.JWTMiddleware)
 			r.Use(s.TenantMiddleware)
-			r.Use(s.RequireTenantAccess) // Ensures user is owner or platform_admin
+			r.Use(s.RequireTenantAdmin) // Ensures user is tenant owner/admin or platform_admin
 			
 			r.Put("/tenants/icon", s.handleUpdateTenantIcon)
 			r.Put("/tenants/appearance", s.handleUpdateTenantAppearance)
+			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
+		})
+
+		// --- Tenant Operations Routes (Staff/Owner/Platform Admin) ---
+		r.Group(func(r chi.Router) {
+			r.Use(s.JWTMiddleware)
+			r.Use(s.TenantMiddleware)
+			r.Use(s.RequireTenantAccess) // Ensures user has tenant access (staff or admin or owner)
+			
 			r.Get("/orders", s.handleListOrders)
 			r.Put("/orders/{id}/status", s.handleUpdateOrderStatus)
-			r.Get("/analytics/revenue", s.handleGetRevenueAnalytics)
 			r.Get("/analytics/top-products", s.handleGetTopProducts)
 
 			// Product management

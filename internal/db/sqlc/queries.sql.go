@@ -293,7 +293,7 @@ func (q *Queries) DeleteTenant(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAverageRating = `-- name: GetAverageRating :one
-SELECT AVG(rating)::float as avg_rating, COUNT(*)::int as review_count
+SELECT COALESCE(AVG(rating), 0.0)::float as avg_rating, COUNT(*)::int as review_count
 FROM product_reviews
 WHERE product_id = $1
 `
