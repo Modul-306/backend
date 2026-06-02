@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/M306/backend/internal/db/sqlc"
 	"github.com/go-chi/chi/v5"
@@ -169,10 +170,16 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Recalculate and update user loyalty tier based on number of orders placed
+	// Recalculate and update user loyalty tier based on number of orders placed in the last 365 days
 	userOrders, err := s.db.ListOrdersByUser(r.Context(), userID)
 	if err == nil {
-		orderCount := len(userOrders)
+		orderCount := 0
+		oneYearAgo := time.Now().AddDate(-1, 0, 0)
+		for _, o := range userOrders {
+			if o.CreatedAt.Valid && o.CreatedAt.Time.After(oneYearAgo) {
+				orderCount++
+			}
+		}
 		var newTier string
 		if orderCount >= 20 {
 			newTier = "Harvest Elite"
