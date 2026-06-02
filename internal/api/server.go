@@ -82,7 +82,6 @@ func (s *Server) Routes() http.Handler {
 				r.Use(s.TenantMiddleware)
 				r.Post("/orders", s.handlePlaceOrder)
 				r.Post("/products/{id}/reviews", s.handleCreateReview)
-				r.Get("/categories", s.handleListCategories)
 			})
 		})
 
