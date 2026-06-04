@@ -25,12 +25,15 @@ type LoyaltyDiscount struct {
 }
 
 type Order struct {
-	ID          uuid.UUID    `json:"id"`
-	TenantID    uuid.UUID    `json:"tenant_id"`
-	UserID      uuid.UUID    `json:"user_id"`
-	Status      string       `json:"status"`
-	TotalAmount string       `json:"total_amount"`
-	CreatedAt   sql.NullTime `json:"created_at"`
+	ID               uuid.UUID     `json:"id"`
+	TenantID         uuid.UUID     `json:"tenant_id"`
+	UserID           uuid.UUID     `json:"user_id"`
+	Status           string        `json:"status"`
+	TotalAmount      string        `json:"total_amount"`
+	CreatedAt        sql.NullTime  `json:"created_at"`
+	PaymentMethod    string        `json:"payment_method"`
+	PayrexxGatewayID sql.NullInt32 `json:"payrexx_gateway_id"`
+	PaymentStatus    string        `json:"payment_status"`
 }
 
 type OrderItem struct {
@@ -63,15 +66,17 @@ type ProductReview struct {
 }
 
 type Tenant struct {
-	ID          uuid.UUID      `json:"id"`
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	CreatedAt   sql.NullTime   `json:"created_at"`
-	IconUrl     sql.NullString `json:"icon_url"`
-	CoverUrl    sql.NullString `json:"cover_url"`
-	Description sql.NullString `json:"description"`
-	OwnerID     uuid.NullUUID  `json:"owner_id"`
-	Category    sql.NullString `json:"category"`
+	ID                  uuid.UUID      `json:"id"`
+	Name                string         `json:"name"`
+	Slug                string         `json:"slug"`
+	CreatedAt           sql.NullTime   `json:"created_at"`
+	IconUrl             sql.NullString `json:"icon_url"`
+	CoverUrl            sql.NullString `json:"cover_url"`
+	Description         sql.NullString `json:"description"`
+	OwnerID             uuid.NullUUID  `json:"owner_id"`
+	Category            sql.NullString `json:"category"`
+	AllowsOnlinePayment bool           `json:"allows_online_payment"`
+	AllowsCashPayment   bool           `json:"allows_cash_payment"`
 }
 
 type TenantOwner struct {

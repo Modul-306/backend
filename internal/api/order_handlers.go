@@ -19,7 +19,13 @@ type orderItemRequest struct {
 }
 
 type placeOrderRequest struct {
-	Items []orderItemRequest `json:"items"`
+	Items         []orderItemRequest `json:"items"`
+	PaymentMethod string             `json:"payment_method"`
+}
+
+type placeOrderResponse struct {
+	Order       db.Order `json:"order"`
+	RedirectURL string   `json:"redirect_url,omitempty"`
 }
 
 func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +59,26 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 
 	if len(req.Items) == 0 {
 		s.errorResponse(w, r, http.StatusBadRequest, "Order must contain at least one item")
+		return
+	}
+
+	paymentMethod := req.PaymentMethod
+	if paymentMethod == "" {
+		paymentMethod = "cash"
+	}
+
+	if paymentMethod != "cash" && paymentMethod != "online" {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid payment method. Must be 'cash' or 'online'")
+		return
+	}
+
+	if paymentMethod == "cash" && !tenant.AllowsCashPayment {
+		s.errorResponse(w, r, http.StatusBadRequest, "Cash payment is not enabled for this store")
+		return
+	}
+
+	if paymentMethod == "online" && !tenant.AllowsOnlinePayment {
+		s.errorResponse(w, r, http.StatusBadRequest, "Online payment is not enabled for this store")
 		return
 	}
 
@@ -129,11 +155,21 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 
 	qtx := s.db.WithTx(tx)
 
+	var initialStatus string
+	if paymentMethod == "online" {
+		initialStatus = "pending_payment"
+	} else {
+		initialStatus = "pending"
+	}
+
 	order, err := qtx.CreateOrder(r.Context(), db.CreateOrderParams{
-		TenantID:    tenant.ID,
-		UserID:      userID,
-		Status:      "pending",
-		TotalAmount: fmt.Sprintf("%.2f", total),
+		TenantID:         tenant.ID,
+		UserID:           userID,
+		Status:           initialStatus,
+		TotalAmount:      fmt.Sprintf("%.2f", total),
+		PaymentMethod:    paymentMethod,
+		PayrexxGatewayID: sql.NullInt32{Valid: false},
+		PaymentStatus:    "unpaid",
 	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create order")
@@ -158,7 +194,6 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 			Stock:    item.quantity,
 		})
 		if err != nil {
-			// This will fail if stock < quantity due to CHECK constraint or WHERE clause
 			s.errorResponse(w, r, http.StatusBadRequest, "Failed to update stock (insufficient funds or concurrent order)")
 			return
 		}
@@ -199,27 +234,50 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Post-commit: Send notifications (non-blocking or at least outside tx)
-	go func() {
-		_ = s.notifications.SendEmail(claims.Email, "Order Confirmation", fmt.Sprintf("Your order #%s for %.2f has been received.", order.ID.String()[:8], total))
-		
-		// Check for low stock and notify tenant owners?
-		// For simplicity, just log it for now
-		for _, item := range items {
-			p, _ := s.db.GetProduct(context.Background(), item.productID)
-			if p.Stock < 5 {
-				// Fetch owners and notify them
-				owners, _ := s.db.ListTenantOwners(context.Background(), tenant.ID)
-				for _, o := range owners {
-					_ = s.notifications.SendEmail(o.Email, "LOW STOCK ALERT", fmt.Sprintf("Product %s is low on stock: %d remaining.", p.Name, p.Stock))
+	// For online payments, create the gateway link via Payrexx
+	var redirectURL string
+	if paymentMethod == "online" {
+		gatewayID, payLink, err := s.createPayrexxGateway(order.ID, total)
+		if err != nil {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create Payrexx payment gateway: "+err.Error())
+			return
+		}
+		redirectURL = payLink
+
+		// Update order gateway ID in database
+		_, err = s.db.UpdateOrderGatewayID(r.Context(), db.UpdateOrderGatewayIDParams{
+			ID:               order.ID,
+			PayrexxGatewayID: sql.NullInt32{Int32: int32(gatewayID), Valid: true},
+		})
+		if err != nil {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to save payment gateway ID on order")
+			return
+		}
+	}
+
+	// Post-commit: Send notifications for cash orders (online orders get emails on webhook confirmation)
+	if paymentMethod == "cash" {
+		go func() {
+			_ = s.notifications.SendEmail(claims.Email, "Order Confirmation", fmt.Sprintf("Your order #%s for %.2f has been received.", order.ID.String()[:8], total))
+			
+			for _, item := range items {
+				p, _ := s.db.GetProduct(context.Background(), item.productID)
+				if p.Stock < 5 {
+					owners, _ := s.db.ListTenantOwners(context.Background(), tenant.ID)
+					for _, o := range owners {
+						_ = s.notifications.SendEmail(o.Email, "LOW STOCK ALERT", fmt.Sprintf("Product %s is low on stock: %d remaining.", p.Name, p.Stock))
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(order)
+	json.NewEncoder(w).Encode(placeOrderResponse{
+		Order:       order,
+		RedirectURL: redirectURL,
+	})
 }
 
 func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {

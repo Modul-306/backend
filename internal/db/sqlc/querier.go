@@ -25,6 +25,7 @@ type Querier interface {
 	DeleteTenant(ctx context.Context, id uuid.UUID) error
 	GetAverageRating(ctx context.Context, productID uuid.UUID) (GetAverageRatingRow, error)
 	GetBlog(ctx context.Context, id uuid.UUID) (Blog, error)
+	GetOrder(ctx context.Context, id uuid.UUID) (Order, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]GetOrderItemsRow, error)
 	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]GetRevenueByDayRow, error)
@@ -47,12 +48,15 @@ type Querier interface {
 	RemoveTenantOwner(ctx context.Context, arg RemoveTenantOwnerParams) error
 	SetTenantOwner(ctx context.Context, arg SetTenantOwnerParams) (Tenant, error)
 	UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, error)
+	UpdateOrderGatewayID(ctx context.Context, arg UpdateOrderGatewayIDParams) (Order, error)
+	UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error)
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductStock(ctx context.Context, arg UpdateProductStockParams) (Product, error)
 	UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Tenant, error)
 	UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAppearanceParams) (Tenant, error)
 	UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconParams) (Tenant, error)
+	UpdateTenantPaymentSettings(ctx context.Context, arg UpdateTenantPaymentSettingsParams) (Tenant, error)
 	UpdateUserLoyaltyTier(ctx context.Context, arg UpdateUserLoyaltyTierParams) (User, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)

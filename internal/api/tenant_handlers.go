@@ -166,9 +166,11 @@ func (s *Server) handleUpdateTenantAppearance(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		CoverUrl    string `json:"cover_url"`
-		Description string `json:"description"`
-		Category    string `json:"category"`
+		CoverUrl            string `json:"cover_url"`
+		Description         string `json:"description"`
+		Category            string `json:"category"`
+		AllowsOnlinePayment *bool  `json:"allows_online_payment"`
+		AllowsCashPayment   *bool  `json:"allows_cash_payment"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -187,6 +189,32 @@ func (s *Server) handleUpdateTenantAppearance(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to update appearance")
 		return
+	}
+
+	if req.AllowsOnlinePayment != nil || req.AllowsCashPayment != nil {
+		allowsOnline := tenant.AllowsOnlinePayment
+		if req.AllowsOnlinePayment != nil {
+			allowsOnline = *req.AllowsOnlinePayment
+		}
+		allowsCash := tenant.AllowsCashPayment
+		if req.AllowsCashPayment != nil {
+			allowsCash = *req.AllowsCashPayment
+		}
+
+		if !allowsOnline && !allowsCash {
+			s.errorResponse(w, r, http.StatusBadRequest, "At least one payment method (Online or Cash) must be enabled")
+			return
+		}
+
+		updatedTenant, err = s.db.UpdateTenantPaymentSettings(r.Context(), db.UpdateTenantPaymentSettingsParams{
+			ID:                  tenant.ID,
+			AllowsOnlinePayment: allowsOnline,
+			AllowsCashPayment:   allowsCash,
+		})
+		if err != nil {
+			s.errorResponse(w, r, http.StatusInternalServerError, "Failed to update payment settings")
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
