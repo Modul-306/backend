@@ -94,8 +94,8 @@ RETURNING *;
 DELETE FROM blogs WHERE id = $1 AND tenant_id = $2;
 
 -- name: CreateOrder :one
-INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: CreateOrderItem :one
@@ -104,7 +104,14 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListOrdersByTenant :many
-SELECT o.*, u.full_name, u.email, u.street, u.zip_code, u.city
+SELECT 
+    o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, o.payment_method, o.payrexx_gateway_id, o.payment_status,
+    o.shipping_street, o.shipping_zip_code, o.shipping_city, o.shipping_full_name,
+    COALESCE(o.shipping_full_name, u.full_name) AS full_name,
+    u.email,
+    COALESCE(o.shipping_street, u.street) AS street,
+    COALESCE(o.shipping_zip_code, u.zip_code) AS zip_code,
+    COALESCE(o.shipping_city, u.city) AS city
 FROM orders o
 JOIN users u ON o.user_id = u.id
 WHERE o.tenant_id = $1 

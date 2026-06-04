@@ -22,6 +22,10 @@ type orderItemRequest struct {
 type placeOrderRequest struct {
 	Items         []orderItemRequest `json:"items"`
 	PaymentMethod string             `json:"payment_method"`
+	Street        string             `json:"street"`
+	ZipCode       string             `json:"zip_code"`
+	City          string             `json:"city"`
+	FullName      string             `json:"full_name"`
 }
 
 type placeOrderResponse struct {
@@ -38,23 +42,38 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify user has filled in their address in their profile
+	// Verify user profile exists
 	userProfile, err := s.db.GetUserByID(r.Context(), userID)
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to retrieve user profile")
 		return
 	}
 
-	if !userProfile.Street.Valid || userProfile.Street.String == "" ||
-		!userProfile.ZipCode.Valid || userProfile.ZipCode.String == "" ||
-		!userProfile.City.Valid || userProfile.City.String == "" {
-		s.errorResponse(w, r, http.StatusBadRequest, "Please set your full delivery address in your profile before placing an order")
-		return
-	}
-
 	var req placeOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.errorResponse(w, r, http.StatusBadRequest, "Invalid input")
+		return
+	}
+
+	shippingStreet := req.Street
+	if shippingStreet == "" && userProfile.Street.Valid {
+		shippingStreet = userProfile.Street.String
+	}
+	shippingZipCode := req.ZipCode
+	if shippingZipCode == "" && userProfile.ZipCode.Valid {
+		shippingZipCode = userProfile.ZipCode.String
+	}
+	shippingCity := req.City
+	if shippingCity == "" && userProfile.City.Valid {
+		shippingCity = userProfile.City.String
+	}
+	shippingFullName := req.FullName
+	if shippingFullName == "" && userProfile.FullName.Valid {
+		shippingFullName = userProfile.FullName.String
+	}
+
+	if shippingStreet == "" || shippingZipCode == "" || shippingCity == "" {
+		s.errorResponse(w, r, http.StatusBadRequest, "Please provide a delivery address or set it in your profile before placing an order")
 		return
 	}
 
@@ -171,6 +190,10 @@ func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
 		PaymentMethod:    paymentMethod,
 		PayrexxGatewayID: sql.NullInt32{Valid: false},
 		PaymentStatus:    "unpaid",
+		ShippingStreet:   sql.NullString{String: shippingStreet, Valid: shippingStreet != ""},
+		ShippingZipCode:  sql.NullString{String: shippingZipCode, Valid: shippingZipCode != ""},
+		ShippingCity:     sql.NullString{String: shippingCity, Valid: shippingCity != ""},
+		ShippingFullName: sql.NullString{String: shippingFullName, Valid: shippingFullName != ""},
 	})
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create order")

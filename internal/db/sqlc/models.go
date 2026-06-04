@@ -25,15 +25,19 @@ type LoyaltyDiscount struct {
 }
 
 type Order struct {
-	ID               uuid.UUID     `json:"id"`
-	TenantID         uuid.UUID     `json:"tenant_id"`
-	UserID           uuid.UUID     `json:"user_id"`
-	Status           string        `json:"status"`
-	TotalAmount      string        `json:"total_amount"`
-	CreatedAt        sql.NullTime  `json:"created_at"`
-	PaymentMethod    string        `json:"payment_method"`
-	PayrexxGatewayID sql.NullInt32 `json:"payrexx_gateway_id"`
-	PaymentStatus    string        `json:"payment_status"`
+	ID               uuid.UUID      `json:"id"`
+	TenantID         uuid.UUID      `json:"tenant_id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	Status           string         `json:"status"`
+	TotalAmount      string         `json:"total_amount"`
+	CreatedAt        sql.NullTime   `json:"created_at"`
+	PaymentMethod    string         `json:"payment_method"`
+	PayrexxGatewayID sql.NullInt32  `json:"payrexx_gateway_id"`
+	PaymentStatus    string         `json:"payment_status"`
+	ShippingStreet   sql.NullString `json:"shipping_street"`
+	ShippingZipCode  sql.NullString `json:"shipping_zip_code"`
+	ShippingCity     sql.NullString `json:"shipping_city"`
+	ShippingFullName sql.NullString `json:"shipping_full_name"`
 }
 
 type OrderItem struct {
