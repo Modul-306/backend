@@ -236,10 +236,9 @@ func (s *Server) checkPayrexxGatewayStatus(gatewayID int) (string, error) {
 	// API Endpoint
 	apiURL := fmt.Sprintf("https://api.payrexx.com/v1.0/Gateway/%d/?instance=%s", gatewayID, s.payrexxInstance)
 
-	// Signature needs to be computed on query string parameters excluding ApiSignature.
-	// The only query parameter we pass is "instance".
-	encodedParams := fmt.Sprintf("instance=%s", s.payrexxInstance)
-	signature := generatePayrexxSignature(encodedParams, s.payrexxAPISecret)
+	// Signature needs to be computed on query string parameters excluding ApiSignature and instance.
+	// Since there are no other query parameters, we sign an empty string.
+	signature := generatePayrexxSignature("", s.payrexxAPISecret)
 
 	// Create URL with query params
 	reqURL := fmt.Sprintf("%s&ApiSignature=%s", apiURL, url.QueryEscape(signature))
