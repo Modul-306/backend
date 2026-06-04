@@ -55,23 +55,41 @@ func (s *Server) handlePayrexxWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse JSON payload
-	var payload payrexxWebhookPayload
-	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
-		s.errorResponse(w, r, http.StatusBadRequest, "Invalid JSON payload")
-		return
-	}
+	var txStatus string
+	var txRefID string
 
-	// Resolve flat or nested transaction structure
-	txStatus := payload.Status
-	txRefID := payload.ReferenceID
-
-	if payload.Transaction != nil {
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON payload
+		var payload payrexxWebhookPayload
+		if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+			s.errorResponse(w, r, http.StatusBadRequest, "Invalid JSON payload")
+			return
+		}
+		txStatus = payload.Status
+		txRefID = payload.ReferenceID
+		if payload.Transaction != nil {
+			if txStatus == "" {
+				txStatus = payload.Transaction.Status
+			}
+			if txRefID == "" {
+				txRefID = payload.Transaction.ReferenceID
+			}
+		}
+	} else {
+		// Parse as form urlencoded
+		values, err := url.ParseQuery(string(bodyBytes))
+		if err != nil {
+			s.errorResponse(w, r, http.StatusBadRequest, "Failed to parse form urlencoded payload")
+			return
+		}
+		txStatus = values.Get("transaction[status]")
+		txRefID = values.Get("transaction[referenceId]")
 		if txStatus == "" {
-			txStatus = payload.Transaction.Status
+			txStatus = values.Get("status")
 		}
 		if txRefID == "" {
-			txRefID = payload.Transaction.ReferenceID
+			txRefID = values.Get("referenceId")
 		}
 	}
 
@@ -156,9 +174,9 @@ func (s *Server) createPayrexxGateway(orderID uuid.UUID, totalAmount float64) (i
 	params.Set("amount", fmt.Sprintf("%d", amountInCents))
 	params.Set("currency", "CHF")
 	params.Set("referenceId", orderID.String())
-	params.Set("successRedirectUrl", fmt.Sprintf("%s/shop/success", frontendURL))
-	params.Set("failedRedirectUrl", fmt.Sprintf("%s/shop/failed", frontendURL))
-	params.Set("cancelRedirectUrl", fmt.Sprintf("%s/shop/cart", frontendURL))
+	params.Set("successRedirectUrl", fmt.Sprintf("%s/orders/%s", frontendURL, orderID.String()))
+	params.Set("failedRedirectUrl", fmt.Sprintf("%s/orders/%s", frontendURL, orderID.String()))
+	params.Set("cancelRedirectUrl", fmt.Sprintf("%s/orders/%s", frontendURL, orderID.String()))
 
 	// Sort and encode parameters alphabetically (excluding ApiSignature)
 	encodedParams := params.Encode()
@@ -213,3 +231,53 @@ func generatePayrexxSignature(queryString string, apiSecret string) string {
 	mac.Write([]byte(queryString))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
+
+func (s *Server) checkPayrexxGatewayStatus(gatewayID int) (string, error) {
+	// API Endpoint
+	apiURL := fmt.Sprintf("https://api.payrexx.com/v1.0/Gateway/%d/?instance=%s", gatewayID, s.payrexxInstance)
+
+	// Signature needs to be computed on query string parameters excluding ApiSignature.
+	// The only query parameter we pass is "instance".
+	encodedParams := fmt.Sprintf("instance=%s", s.payrexxInstance)
+	signature := generatePayrexxSignature(encodedParams, s.payrexxAPISecret)
+
+	// Create URL with query params
+	reqURL := fmt.Sprintf("%s&ApiSignature=%s", apiURL, url.QueryEscape(signature))
+
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("payrexx api returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var res struct {
+		Status string `json:"status"`
+		Data   []struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+
+	if res.Status != "success" || len(res.Data) == 0 {
+		return "", fmt.Errorf("payrexx api returned failure status or empty data: %s", res.Status)
+	}
+
+	return res.Data[0].Status, nil
+}
+
