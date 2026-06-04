@@ -55,19 +55,23 @@ func (q *Queries) CreateBlog(ctx context.Context, arg CreateBlogParams) (Blog, e
 }
 
 const createOrder = `-- name: CreateOrder :one
-INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name
 `
 
 type CreateOrderParams struct {
-	TenantID         uuid.UUID     `json:"tenant_id"`
-	UserID           uuid.UUID     `json:"user_id"`
-	Status           string        `json:"status"`
-	TotalAmount      string        `json:"total_amount"`
-	PaymentMethod    string        `json:"payment_method"`
-	PayrexxGatewayID sql.NullInt32 `json:"payrexx_gateway_id"`
-	PaymentStatus    string        `json:"payment_status"`
+	TenantID         uuid.UUID      `json:"tenant_id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	Status           string         `json:"status"`
+	TotalAmount      string         `json:"total_amount"`
+	PaymentMethod    string         `json:"payment_method"`
+	PayrexxGatewayID sql.NullInt32  `json:"payrexx_gateway_id"`
+	PaymentStatus    string         `json:"payment_status"`
+	ShippingStreet   sql.NullString `json:"shipping_street"`
+	ShippingZipCode  sql.NullString `json:"shipping_zip_code"`
+	ShippingCity     sql.NullString `json:"shipping_city"`
+	ShippingFullName sql.NullString `json:"shipping_full_name"`
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
@@ -79,6 +83,10 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		arg.PaymentMethod,
 		arg.PayrexxGatewayID,
 		arg.PaymentStatus,
+		arg.ShippingStreet,
+		arg.ShippingZipCode,
+		arg.ShippingCity,
+		arg.ShippingFullName,
 	)
 	var i Order
 	err := row.Scan(
@@ -91,6 +99,10 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.PaymentMethod,
 		&i.PayrexxGatewayID,
 		&i.PaymentStatus,
+		&i.ShippingStreet,
+		&i.ShippingZipCode,
+		&i.ShippingCity,
+		&i.ShippingFullName,
 	)
 	return i, err
 }
@@ -339,7 +351,7 @@ func (q *Queries) GetBlog(ctx context.Context, id uuid.UUID) (Blog, error) {
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status FROM orders WHERE id = $1 LIMIT 1
+SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name FROM orders WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
@@ -355,6 +367,10 @@ func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 		&i.PaymentMethod,
 		&i.PayrexxGatewayID,
 		&i.PaymentStatus,
+		&i.ShippingStreet,
+		&i.ShippingZipCode,
+		&i.ShippingCity,
+		&i.ShippingFullName,
 	)
 	return i, err
 }
@@ -666,7 +682,14 @@ func (q *Queries) ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql
 }
 
 const listOrdersByTenant = `-- name: ListOrdersByTenant :many
-SELECT o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, o.payment_method, o.payrexx_gateway_id, o.payment_status, u.full_name, u.email, u.street, u.zip_code, u.city
+SELECT 
+    o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, o.payment_method, o.payrexx_gateway_id, o.payment_status,
+    o.shipping_street, o.shipping_zip_code, o.shipping_city, o.shipping_full_name,
+    COALESCE(o.shipping_full_name, u.full_name) AS full_name,
+    u.email,
+    COALESCE(o.shipping_street, u.street) AS street,
+    COALESCE(o.shipping_zip_code, u.zip_code) AS zip_code,
+    COALESCE(o.shipping_city, u.city) AS city
 FROM orders o
 JOIN users u ON o.user_id = u.id
 WHERE o.tenant_id = $1 
@@ -683,6 +706,10 @@ type ListOrdersByTenantRow struct {
 	PaymentMethod    string         `json:"payment_method"`
 	PayrexxGatewayID sql.NullInt32  `json:"payrexx_gateway_id"`
 	PaymentStatus    string         `json:"payment_status"`
+	ShippingStreet   sql.NullString `json:"shipping_street"`
+	ShippingZipCode  sql.NullString `json:"shipping_zip_code"`
+	ShippingCity     sql.NullString `json:"shipping_city"`
+	ShippingFullName sql.NullString `json:"shipping_full_name"`
 	FullName         sql.NullString `json:"full_name"`
 	Email            string         `json:"email"`
 	Street           sql.NullString `json:"street"`
@@ -709,6 +736,10 @@ func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([
 			&i.PaymentMethod,
 			&i.PayrexxGatewayID,
 			&i.PaymentStatus,
+			&i.ShippingStreet,
+			&i.ShippingZipCode,
+			&i.ShippingCity,
+			&i.ShippingFullName,
 			&i.FullName,
 			&i.Email,
 			&i.Street,
@@ -729,7 +760,7 @@ func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([
 }
 
 const listOrdersByUser = `-- name: ListOrdersByUser :many
-SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status FROM orders WHERE user_id = $1 ORDER BY created_at DESC
+SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name FROM orders WHERE user_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error) {
@@ -751,6 +782,10 @@ func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Ord
 			&i.PaymentMethod,
 			&i.PayrexxGatewayID,
 			&i.PaymentStatus,
+			&i.ShippingStreet,
+			&i.ShippingZipCode,
+			&i.ShippingCity,
+			&i.ShippingFullName,
 		); err != nil {
 			return nil, err
 		}
@@ -1085,7 +1120,7 @@ func (q *Queries) UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, e
 }
 
 const updateOrderGatewayID = `-- name: UpdateOrderGatewayID :one
-UPDATE orders SET payrexx_gateway_id = $2 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+UPDATE orders SET payrexx_gateway_id = $2 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name
 `
 
 type UpdateOrderGatewayIDParams struct {
@@ -1106,12 +1141,16 @@ func (q *Queries) UpdateOrderGatewayID(ctx context.Context, arg UpdateOrderGatew
 		&i.PaymentMethod,
 		&i.PayrexxGatewayID,
 		&i.PaymentStatus,
+		&i.ShippingStreet,
+		&i.ShippingZipCode,
+		&i.ShippingCity,
+		&i.ShippingFullName,
 	)
 	return i, err
 }
 
 const updateOrderPaymentStatus = `-- name: UpdateOrderPaymentStatus :one
-UPDATE orders SET status = $2, payment_status = $3 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+UPDATE orders SET status = $2, payment_status = $3 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name
 `
 
 type UpdateOrderPaymentStatusParams struct {
@@ -1133,12 +1172,16 @@ func (q *Queries) UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderP
 		&i.PaymentMethod,
 		&i.PayrexxGatewayID,
 		&i.PaymentStatus,
+		&i.ShippingStreet,
+		&i.ShippingZipCode,
+		&i.ShippingCity,
+		&i.ShippingFullName,
 	)
 	return i, err
 }
 
 const updateOrderStatus = `-- name: UpdateOrderStatus :one
-UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status, shipping_street, shipping_zip_code, shipping_city, shipping_full_name
 `
 
 type UpdateOrderStatusParams struct {
@@ -1160,6 +1203,10 @@ func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusPa
 		&i.PaymentMethod,
 		&i.PayrexxGatewayID,
 		&i.PaymentStatus,
+		&i.ShippingStreet,
+		&i.ShippingZipCode,
+		&i.ShippingCity,
+		&i.ShippingFullName,
 	)
 	return i, err
 }

@@ -181,3 +181,102 @@ func TestGetOrderDetailsWithRealtimePayrexxCheck(t *testing.T) {
 	require.Equal(t, "completed", dbOrder.Status)
 	require.Equal(t, "paid", dbOrder.PaymentStatus)
 }
+
+func TestCreateOrderWithShippingAddressOverride(t *testing.T) {
+	server := NewServer(testQueries, testDB, &mockStorage{}, &MockEmailService{}, "secret", "test-instance", "api-secret-key")
+	router := server.Routes()
+
+	// 1. Create mock tenant (ensuring allows_cash_payment is true)
+	tenant, err := testQueries.CreateTenant(context.Background(), db.CreateTenantParams{
+		Name: "Shipping Override Farm",
+		Slug: "shipping-override-farm",
+	})
+	require.NoError(t, err)
+	_, err = testQueries.UpdateTenantPaymentSettings(context.Background(), db.UpdateTenantPaymentSettingsParams{
+		ID:                  tenant.ID,
+		AllowsOnlinePayment: true,
+		AllowsCashPayment:   true,
+	})
+	require.NoError(t, err)
+
+	// 2. Create mock user (with address)
+	user, err := testQueries.CreateUser(context.Background(), db.CreateUserParams{
+		TenantID:     uuid.NullUUID{UUID: tenant.ID, Valid: true},
+		Email:        "user-shipping@paymenttest.com",
+		PasswordHash: "somehash",
+		Role:         "customer",
+	})
+	require.NoError(t, err)
+	_, err = testQueries.UpdateUserProfile(context.Background(), db.UpdateUserProfileParams{
+		ID:       user.ID,
+		FullName: sql.NullString{String: "Default Name", Valid: true},
+		Street:   sql.NullString{String: "Default Street 1", Valid: true},
+		ZipCode:  sql.NullString{String: "1000", Valid: true},
+		City:     sql.NullString{String: "Default City", Valid: true},
+	})
+	require.NoError(t, err)
+
+	// 3. Create mock product
+	product, err := testQueries.CreateProduct(context.Background(), db.CreateProductParams{
+		TenantID:    tenant.ID,
+		Name:        "Apple",
+		Description: sql.NullString{String: "Fresh", Valid: true},
+		Price:       "2.50",
+		Stock:       100,
+		ImageUrl:    sql.NullString{String: "", Valid: true},
+		Category:    sql.NullString{String: "Fruit", Valid: true},
+	})
+	require.NoError(t, err)
+
+	// 4. Generate JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID.String(),
+		"email":   user.Email,
+		"role":    user.Role,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+	})
+	tokenString, err := token.SignedString([]byte("secret"))
+	require.NoError(t, err)
+
+	// 5. Make request to POST /api/v1/orders with custom address fields
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"payment_method": "cash",
+		"items": []map[string]interface{}{
+			{
+				"product_id": product.ID.String(),
+				"quantity":   2,
+			},
+		},
+		"street":    "Override Street 999",
+		"zip_code":   "8888",
+		"city":       "Override Town",
+		"full_name":  "Override Full Name",
+	})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest("POST", "/api/v1/orders", bytes.NewBuffer(reqBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenString))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-Slug", "shipping-override-farm")
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusCreated, rr.Code)
+
+	var res struct {
+		Order db.Order `json:"order"`
+	}
+	err = json.NewDecoder(rr.Body).Decode(&res)
+	require.NoError(t, err)
+
+	// 6. Verify that the order record has the custom shipping address in the DB
+	dbOrder, err := testQueries.GetOrder(context.Background(), res.Order.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Override Street 999", dbOrder.ShippingStreet.String)
+	require.Equal(t, "8888", dbOrder.ShippingZipCode.String)
+	require.Equal(t, "Override Town", dbOrder.ShippingCity.String)
+	require.Equal(t, "Override Full Name", dbOrder.ShippingFullName.String)
+}
+
