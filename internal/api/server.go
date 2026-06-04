@@ -13,20 +13,24 @@ import (
 )
 
 type Server struct {
-	db            *db.Queries
-	conn          *sql.DB
-	storage       storage.Storage
-	notifications NotificationService
-	jwtSecret     string
+	db               *db.Queries
+	conn             *sql.DB
+	storage          storage.Storage
+	notifications    NotificationService
+	jwtSecret        string
+	payrexxInstance  string
+	payrexxAPISecret string
 }
 
-func NewServer(queries *db.Queries, conn *sql.DB, storage storage.Storage, notifications NotificationService, jwtSecret string) *Server {
+func NewServer(queries *db.Queries, conn *sql.DB, storage storage.Storage, notifications NotificationService, jwtSecret string, payrexxInstance string, payrexxAPISecret string) *Server {
 	return &Server{
-		db:            queries,
-		conn:          conn,
-		storage:       storage,
-		notifications: notifications,
-		jwtSecret:     jwtSecret,
+		db:               queries,
+		conn:             conn,
+		storage:          storage,
+		notifications:    notifications,
+		jwtSecret:        jwtSecret,
+		payrexxInstance:  payrexxInstance,
+		payrexxAPISecret: payrexxAPISecret,
 	}
 }
 
@@ -57,6 +61,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/tenants/{slug}", s.handleGetTenant) // Moved out of middleware
 		r.Get("/tenants/{id}/owners", s.handleListTenantOwners)
 		r.Get("/tenants/categories", s.handleListTenantCategories)
+		r.Post("/payments/webhook", s.handlePayrexxWebhook)
 		
 		r.Group(func(r chi.Router) {
 			r.Use(s.TenantMiddleware)

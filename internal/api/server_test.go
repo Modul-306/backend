@@ -81,7 +81,7 @@ func (m *mockStorage) UploadFile(ctx context.Context, bucket, key string, body i
 	return "mock-url", nil
 }
 func TestLogin(t *testing.T) {
-	server := NewServer(testQueries, testDB, &mockStorage{}, &MockEmailService{}, "secret")
+	server := NewServer(testQueries, testDB, &mockStorage{}, &MockEmailService{}, "secret", "", "")
 	r := server.Routes()
 
 	body, _ := json.Marshal(map[string]string{

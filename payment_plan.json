@@ -1,28 +1,23 @@
 {
   "project": "Cattlehof Network Payment Integration Plan (Online & Cash Selection)",
-  "recommended_provider": "Stripe",
-  "implementation_type": "Stripe Checkout (Online) & Go Direct Checkout (Cash)",
+  "recommended_provider": "Payrexx",
+  "implementation_type": "Payrexx Gateway (Online) & Go Direct Checkout (Cash)",
   "required_environment_variables": {
     "backend": {
-      "STRIPE_SECRET_KEY": {
-        "description": "Secret API key used to authenticate server-side requests to Stripe",
-        "example": "sk_test_51...your_secret_key"
+      "PAYREXX_INSTANCE_NAME": {
+        "description": "Subdomain of your Payrexx account (e.g., 'cattlehof' in 'cattlehof.payrexx.com')",
+        "example": "cattlehof"
       },
-      "STRIPE_WEBHOOK_SECRET": {
-        "description": "Signing secret used to verify Stripe webhook signatures to guarantee authenticity",
-        "example": "whsec_...your_webhook_secret"
+      "PAYREXX_API_SECRET": {
+        "description": "API secret key used to generate request signatures and verify webhook (IPN) payloads",
+        "example": "your_payrexx_api_secret_key"
       },
       "FRONTEND_URL": {
-        "description": "Base URL of the frontend client app, used for Success and Cancel redirects",
+        "description": "Base URL of the frontend client app, used for Success, Cancel, and Failure redirects",
         "example": "http://localhost:3000"
       }
     },
-    "frontend": {
-      "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": {
-        "description": "Publishable key for client-side Stripe interactions (if using Stripe Elements/SDK)",
-        "example": "pk_test_51...your_publishable_key"
-      }
-    }
+    "frontend": {}
   },
   "database_migrations": [
     {
@@ -34,7 +29,7 @@
         "ALTER TABLE orders DROP CONSTRAINT orders_status_check;",
         "ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending', 'pending_payment', 'completed', 'cancelled'));",
         "ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('online', 'cash'));",
-        "ALTER TABLE orders ADD COLUMN stripe_session_id TEXT UNIQUE;",
+        "ALTER TABLE orders ADD COLUMN payrexx_gateway_id INT UNIQUE;",
         "ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid';"
       ]
     }
@@ -42,25 +37,25 @@
   "payment_flow_steps": [
     "Customer adds items to cart on storefront.",
     "Frontend checks tenant payment configuration: allows_online_payment and allows_cash_payment.",
-    "If both are enabled, frontend renders an selection menu in checkout for Card vs Cash. Otherwise, it defaults and hides selection.",
+    "If both are enabled, frontend renders a selection menu in checkout for Card vs Cash. Otherwise, it defaults and hides selection.",
     "Customer clicks 'Complete Purchase'.",
     "Frontend makes request: POST /api/v1/orders with payload containing items and payment_method ('online' or 'cash').",
     "Backend validates stock, recalculates prices and loyalty discounts, and retrieves tenant configuration.",
     "If payment_method = 'cash': Backend asserts allows_cash_payment is true, transactionally saves order as status = 'pending', and returns the order object immediately.",
-    "If payment_method = 'online': Backend asserts allows_online_payment is true, transactionally saves order as status = 'pending_payment', calls Stripe to generate a Checkout Session, and returns the redirect stripe_url.",
-    "For online payments, frontend redirects user to Stripe hosted page, user pays, Stripe redirects to success page, and asynchronous webhook verifies signature, updates order to status = 'completed' and sets payment_status = 'paid'."
+    "If payment_method = 'online': Backend asserts allows_online_payment is true, transactionally saves order as status = 'pending_payment', calls Payrexx Gateway API to generate a Gateway, saves the returned payrexx_gateway_id on the order, and returns the redirect link.",
+    "For online payments, frontend redirects user to the Payrexx gateway URL, user pays, Payrexx redirects to success page, and asynchronous IPN webhook verifies signature, updates order to status = 'completed' and sets payment_status = 'paid'."
   ],
   "files_to_be_added_or_modified": {
     "backend": [
       {
         "path": "backend/internal/api/order_handlers.go",
         "action": "MODIFY",
-        "description": "Update handlePlaceOrder to parse payment_method, retrieve tenant flags, and branch transactionally between cash fulfillment and Stripe checkout generation."
+        "description": "Update handlePlaceOrder to parse payment_method, retrieve tenant flags, and branch transactionally between cash fulfillment and Payrexx Gateway generation (generating the signature and payload using HMAC-SHA256)."
       },
       {
         "path": "backend/internal/api/payment_handlers.go",
         "action": "NEW",
-        "description": "Implement handleStripeWebhook to process completed or expired Stripe sessions."
+        "description": "Implement handlePayrexxWebhook (IPN) to verify signature against X-Webhook-Signature using HMAC-SHA256 and process completed or failed payments."
       },
       {
         "path": "backend/internal/api/tenant_handlers.go",
@@ -75,12 +70,12 @@
       {
         "path": "backend/cmd/main.go",
         "action": "MODIFY",
-        "description": "Initialize the Stripe SDK with environment API keys."
+        "description": "Initialize Payrexx configuration parameters from environment variables."
       },
       {
         "path": "backend/.env.example",
         "action": "MODIFY",
-        "description": "Add placeholders for Stripe secrets."
+        "description": "Add placeholders for Payrexx instance name and API secret keys."
       }
     },
     "frontend": [
@@ -92,7 +87,7 @@
       {
         "path": "frontend/src/components/Shop.tsx",
         "action": "MODIFY",
-        "description": "Render payment selection UI if both options are active, and adjust checkout payload submission."
+        "description": "Render payment selection UI if both options are active, and adjust checkout payload submission to redirect user to the Payrexx gateway link."
       }
     ]
   }

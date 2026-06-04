@@ -63,6 +63,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getBlogStmt, err = db.PrepareContext(ctx, getBlog); err != nil {
 		return nil, fmt.Errorf("error preparing query GetBlog: %w", err)
 	}
+	if q.getOrderStmt, err = db.PrepareContext(ctx, getOrder); err != nil {
+		return nil, fmt.Errorf("error preparing query GetOrder: %w", err)
+	}
 	if q.getOrderItemsStmt, err = db.PrepareContext(ctx, getOrderItems); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrderItems: %w", err)
 	}
@@ -129,6 +132,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateBlogStmt, err = db.PrepareContext(ctx, updateBlog); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateBlog: %w", err)
 	}
+	if q.updateOrderGatewayIDStmt, err = db.PrepareContext(ctx, updateOrderGatewayID); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateOrderGatewayID: %w", err)
+	}
+	if q.updateOrderPaymentStatusStmt, err = db.PrepareContext(ctx, updateOrderPaymentStatus); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateOrderPaymentStatus: %w", err)
+	}
 	if q.updateOrderStatusStmt, err = db.PrepareContext(ctx, updateOrderStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateOrderStatus: %w", err)
 	}
@@ -146,6 +155,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateTenantIconStmt, err = db.PrepareContext(ctx, updateTenantIcon); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateTenantIcon: %w", err)
+	}
+	if q.updateTenantPaymentSettingsStmt, err = db.PrepareContext(ctx, updateTenantPaymentSettings); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateTenantPaymentSettings: %w", err)
 	}
 	if q.updateUserLoyaltyTierStmt, err = db.PrepareContext(ctx, updateUserLoyaltyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserLoyaltyTier: %w", err)
@@ -224,6 +236,11 @@ func (q *Queries) Close() error {
 	if q.getBlogStmt != nil {
 		if cerr := q.getBlogStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getBlogStmt: %w", cerr)
+		}
+	}
+	if q.getOrderStmt != nil {
+		if cerr := q.getOrderStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getOrderStmt: %w", cerr)
 		}
 	}
 	if q.getOrderItemsStmt != nil {
@@ -336,6 +353,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateBlogStmt: %w", cerr)
 		}
 	}
+	if q.updateOrderGatewayIDStmt != nil {
+		if cerr := q.updateOrderGatewayIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateOrderGatewayIDStmt: %w", cerr)
+		}
+	}
+	if q.updateOrderPaymentStatusStmt != nil {
+		if cerr := q.updateOrderPaymentStatusStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateOrderPaymentStatusStmt: %w", cerr)
+		}
+	}
 	if q.updateOrderStatusStmt != nil {
 		if cerr := q.updateOrderStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateOrderStatusStmt: %w", cerr)
@@ -364,6 +391,11 @@ func (q *Queries) Close() error {
 	if q.updateTenantIconStmt != nil {
 		if cerr := q.updateTenantIconStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateTenantIconStmt: %w", cerr)
+		}
+	}
+	if q.updateTenantPaymentSettingsStmt != nil {
+		if cerr := q.updateTenantPaymentSettingsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateTenantPaymentSettingsStmt: %w", cerr)
 		}
 	}
 	if q.updateUserLoyaltyTierStmt != nil {
@@ -418,101 +450,109 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                         DBTX
-	tx                         *sql.Tx
-	addTenantOwnerStmt         *sql.Stmt
-	createBlogStmt             *sql.Stmt
-	createOrderStmt            *sql.Stmt
-	createOrderItemStmt        *sql.Stmt
-	createProductStmt          *sql.Stmt
-	createReviewStmt           *sql.Stmt
-	createTenantStmt           *sql.Stmt
-	createUserStmt             *sql.Stmt
-	deleteBlogStmt             *sql.Stmt
-	deleteProductStmt          *sql.Stmt
-	deleteTenantStmt           *sql.Stmt
-	getAverageRatingStmt       *sql.Stmt
-	getBlogStmt                *sql.Stmt
-	getOrderItemsStmt          *sql.Stmt
-	getProductStmt             *sql.Stmt
-	getRevenueByDayStmt        *sql.Stmt
-	getTenantBySlugStmt        *sql.Stmt
-	getTopSellingProductsStmt  *sql.Stmt
-	getUserByEmailStmt         *sql.Stmt
-	getUserByIDStmt            *sql.Stmt
-	getUserDiscountStmt        *sql.Stmt
-	isTenantOwnerStmt          *sql.Stmt
-	listBlogsStmt              *sql.Stmt
-	listCategoriesStmt         *sql.Stmt
-	listOrdersByTenantStmt     *sql.Stmt
-	listOrdersByUserStmt       *sql.Stmt
-	listProductsStmt           *sql.Stmt
-	listReviewsByProductStmt   *sql.Stmt
-	listTenantCategoriesStmt   *sql.Stmt
-	listTenantOwnersStmt       *sql.Stmt
-	listTenantsStmt            *sql.Stmt
-	listUsersStmt              *sql.Stmt
-	removeTenantOwnerStmt      *sql.Stmt
-	setTenantOwnerStmt         *sql.Stmt
-	updateBlogStmt             *sql.Stmt
-	updateOrderStatusStmt      *sql.Stmt
-	updateProductStmt          *sql.Stmt
-	updateProductStockStmt     *sql.Stmt
-	updateTenantStmt           *sql.Stmt
-	updateTenantAppearanceStmt *sql.Stmt
-	updateTenantIconStmt       *sql.Stmt
-	updateUserLoyaltyTierStmt  *sql.Stmt
-	updateUserProfileStmt      *sql.Stmt
-	updateUserRoleStmt         *sql.Stmt
+	db                              DBTX
+	tx                              *sql.Tx
+	addTenantOwnerStmt              *sql.Stmt
+	createBlogStmt                  *sql.Stmt
+	createOrderStmt                 *sql.Stmt
+	createOrderItemStmt             *sql.Stmt
+	createProductStmt               *sql.Stmt
+	createReviewStmt                *sql.Stmt
+	createTenantStmt                *sql.Stmt
+	createUserStmt                  *sql.Stmt
+	deleteBlogStmt                  *sql.Stmt
+	deleteProductStmt               *sql.Stmt
+	deleteTenantStmt                *sql.Stmt
+	getAverageRatingStmt            *sql.Stmt
+	getBlogStmt                     *sql.Stmt
+	getOrderStmt                    *sql.Stmt
+	getOrderItemsStmt               *sql.Stmt
+	getProductStmt                  *sql.Stmt
+	getRevenueByDayStmt             *sql.Stmt
+	getTenantBySlugStmt             *sql.Stmt
+	getTopSellingProductsStmt       *sql.Stmt
+	getUserByEmailStmt              *sql.Stmt
+	getUserByIDStmt                 *sql.Stmt
+	getUserDiscountStmt             *sql.Stmt
+	isTenantOwnerStmt               *sql.Stmt
+	listBlogsStmt                   *sql.Stmt
+	listCategoriesStmt              *sql.Stmt
+	listOrdersByTenantStmt          *sql.Stmt
+	listOrdersByUserStmt            *sql.Stmt
+	listProductsStmt                *sql.Stmt
+	listReviewsByProductStmt        *sql.Stmt
+	listTenantCategoriesStmt        *sql.Stmt
+	listTenantOwnersStmt            *sql.Stmt
+	listTenantsStmt                 *sql.Stmt
+	listUsersStmt                   *sql.Stmt
+	removeTenantOwnerStmt           *sql.Stmt
+	setTenantOwnerStmt              *sql.Stmt
+	updateBlogStmt                  *sql.Stmt
+	updateOrderGatewayIDStmt        *sql.Stmt
+	updateOrderPaymentStatusStmt    *sql.Stmt
+	updateOrderStatusStmt           *sql.Stmt
+	updateProductStmt               *sql.Stmt
+	updateProductStockStmt          *sql.Stmt
+	updateTenantStmt                *sql.Stmt
+	updateTenantAppearanceStmt      *sql.Stmt
+	updateTenantIconStmt            *sql.Stmt
+	updateTenantPaymentSettingsStmt *sql.Stmt
+	updateUserLoyaltyTierStmt       *sql.Stmt
+	updateUserProfileStmt           *sql.Stmt
+	updateUserRoleStmt              *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                         tx,
-		tx:                         tx,
-		addTenantOwnerStmt:         q.addTenantOwnerStmt,
-		createBlogStmt:             q.createBlogStmt,
-		createOrderStmt:            q.createOrderStmt,
-		createOrderItemStmt:        q.createOrderItemStmt,
-		createProductStmt:          q.createProductStmt,
-		createReviewStmt:           q.createReviewStmt,
-		createTenantStmt:           q.createTenantStmt,
-		createUserStmt:             q.createUserStmt,
-		deleteBlogStmt:             q.deleteBlogStmt,
-		deleteProductStmt:          q.deleteProductStmt,
-		deleteTenantStmt:           q.deleteTenantStmt,
-		getAverageRatingStmt:       q.getAverageRatingStmt,
-		getBlogStmt:                q.getBlogStmt,
-		getOrderItemsStmt:          q.getOrderItemsStmt,
-		getProductStmt:             q.getProductStmt,
-		getRevenueByDayStmt:        q.getRevenueByDayStmt,
-		getTenantBySlugStmt:        q.getTenantBySlugStmt,
-		getTopSellingProductsStmt:  q.getTopSellingProductsStmt,
-		getUserByEmailStmt:         q.getUserByEmailStmt,
-		getUserByIDStmt:            q.getUserByIDStmt,
-		getUserDiscountStmt:        q.getUserDiscountStmt,
-		isTenantOwnerStmt:          q.isTenantOwnerStmt,
-		listBlogsStmt:              q.listBlogsStmt,
-		listCategoriesStmt:         q.listCategoriesStmt,
-		listOrdersByTenantStmt:     q.listOrdersByTenantStmt,
-		listOrdersByUserStmt:       q.listOrdersByUserStmt,
-		listProductsStmt:           q.listProductsStmt,
-		listReviewsByProductStmt:   q.listReviewsByProductStmt,
-		listTenantCategoriesStmt:   q.listTenantCategoriesStmt,
-		listTenantOwnersStmt:       q.listTenantOwnersStmt,
-		listTenantsStmt:            q.listTenantsStmt,
-		listUsersStmt:              q.listUsersStmt,
-		removeTenantOwnerStmt:      q.removeTenantOwnerStmt,
-		setTenantOwnerStmt:         q.setTenantOwnerStmt,
-		updateBlogStmt:             q.updateBlogStmt,
-		updateOrderStatusStmt:      q.updateOrderStatusStmt,
-		updateProductStmt:          q.updateProductStmt,
-		updateProductStockStmt:     q.updateProductStockStmt,
-		updateTenantStmt:           q.updateTenantStmt,
-		updateTenantAppearanceStmt: q.updateTenantAppearanceStmt,
-		updateTenantIconStmt:       q.updateTenantIconStmt,
-		updateUserLoyaltyTierStmt:  q.updateUserLoyaltyTierStmt,
-		updateUserProfileStmt:      q.updateUserProfileStmt,
-		updateUserRoleStmt:         q.updateUserRoleStmt,
+		db:                              tx,
+		tx:                              tx,
+		addTenantOwnerStmt:              q.addTenantOwnerStmt,
+		createBlogStmt:                  q.createBlogStmt,
+		createOrderStmt:                 q.createOrderStmt,
+		createOrderItemStmt:             q.createOrderItemStmt,
+		createProductStmt:               q.createProductStmt,
+		createReviewStmt:                q.createReviewStmt,
+		createTenantStmt:                q.createTenantStmt,
+		createUserStmt:                  q.createUserStmt,
+		deleteBlogStmt:                  q.deleteBlogStmt,
+		deleteProductStmt:               q.deleteProductStmt,
+		deleteTenantStmt:                q.deleteTenantStmt,
+		getAverageRatingStmt:            q.getAverageRatingStmt,
+		getBlogStmt:                     q.getBlogStmt,
+		getOrderStmt:                    q.getOrderStmt,
+		getOrderItemsStmt:               q.getOrderItemsStmt,
+		getProductStmt:                  q.getProductStmt,
+		getRevenueByDayStmt:             q.getRevenueByDayStmt,
+		getTenantBySlugStmt:             q.getTenantBySlugStmt,
+		getTopSellingProductsStmt:       q.getTopSellingProductsStmt,
+		getUserByEmailStmt:              q.getUserByEmailStmt,
+		getUserByIDStmt:                 q.getUserByIDStmt,
+		getUserDiscountStmt:             q.getUserDiscountStmt,
+		isTenantOwnerStmt:               q.isTenantOwnerStmt,
+		listBlogsStmt:                   q.listBlogsStmt,
+		listCategoriesStmt:              q.listCategoriesStmt,
+		listOrdersByTenantStmt:          q.listOrdersByTenantStmt,
+		listOrdersByUserStmt:            q.listOrdersByUserStmt,
+		listProductsStmt:                q.listProductsStmt,
+		listReviewsByProductStmt:        q.listReviewsByProductStmt,
+		listTenantCategoriesStmt:        q.listTenantCategoriesStmt,
+		listTenantOwnersStmt:            q.listTenantOwnersStmt,
+		listTenantsStmt:                 q.listTenantsStmt,
+		listUsersStmt:                   q.listUsersStmt,
+		removeTenantOwnerStmt:           q.removeTenantOwnerStmt,
+		setTenantOwnerStmt:              q.setTenantOwnerStmt,
+		updateBlogStmt:                  q.updateBlogStmt,
+		updateOrderGatewayIDStmt:        q.updateOrderGatewayIDStmt,
+		updateOrderPaymentStatusStmt:    q.updateOrderPaymentStatusStmt,
+		updateOrderStatusStmt:           q.updateOrderStatusStmt,
+		updateProductStmt:               q.updateProductStmt,
+		updateProductStockStmt:          q.updateProductStockStmt,
+		updateTenantStmt:                q.updateTenantStmt,
+		updateTenantAppearanceStmt:      q.updateTenantAppearanceStmt,
+		updateTenantIconStmt:            q.updateTenantIconStmt,
+		updateTenantPaymentSettingsStmt: q.updateTenantPaymentSettingsStmt,
+		updateUserLoyaltyTierStmt:       q.updateUserLoyaltyTierStmt,
+		updateUserProfileStmt:           q.updateUserProfileStmt,
+		updateUserRoleStmt:              q.updateUserRoleStmt,
 	}
 }

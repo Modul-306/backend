@@ -55,16 +55,19 @@ func (q *Queries) CreateBlog(ctx context.Context, arg CreateBlogParams) (Blog, e
 }
 
 const createOrder = `-- name: CreateOrder :one
-INSERT INTO orders (tenant_id, user_id, status, total_amount)
-VALUES ($1, $2, $3, $4)
-RETURNING id, tenant_id, user_id, status, total_amount, created_at
+INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
 `
 
 type CreateOrderParams struct {
-	TenantID    uuid.UUID `json:"tenant_id"`
-	UserID      uuid.UUID `json:"user_id"`
-	Status      string    `json:"status"`
-	TotalAmount string    `json:"total_amount"`
+	TenantID         uuid.UUID     `json:"tenant_id"`
+	UserID           uuid.UUID     `json:"user_id"`
+	Status           string        `json:"status"`
+	TotalAmount      string        `json:"total_amount"`
+	PaymentMethod    string        `json:"payment_method"`
+	PayrexxGatewayID sql.NullInt32 `json:"payrexx_gateway_id"`
+	PaymentStatus    string        `json:"payment_status"`
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
@@ -73,6 +76,9 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		arg.UserID,
 		arg.Status,
 		arg.TotalAmount,
+		arg.PaymentMethod,
+		arg.PayrexxGatewayID,
+		arg.PaymentStatus,
 	)
 	var i Order
 	err := row.Scan(
@@ -82,6 +88,9 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.Status,
 		&i.TotalAmount,
 		&i.CreatedAt,
+		&i.PaymentMethod,
+		&i.PayrexxGatewayID,
+		&i.PaymentStatus,
 	)
 	return i, err
 }
@@ -193,7 +202,7 @@ func (q *Queries) CreateReview(ctx context.Context, arg CreateReviewParams) (Pro
 const createTenant = `-- name: CreateTenant :one
 INSERT INTO tenants (name, slug)
 VALUES ($1, $2)
-RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
 `
 
 type CreateTenantParams struct {
@@ -214,6 +223,8 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }
@@ -327,6 +338,27 @@ func (q *Queries) GetBlog(ctx context.Context, id uuid.UUID) (Blog, error) {
 	return i, err
 }
 
+const getOrder = `-- name: GetOrder :one
+SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status FROM orders WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
+	row := q.queryRow(ctx, q.getOrderStmt, getOrder, id)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.UserID,
+		&i.Status,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.PaymentMethod,
+		&i.PayrexxGatewayID,
+		&i.PaymentStatus,
+	)
+	return i, err
+}
+
 const getOrderItems = `-- name: GetOrderItems :many
 SELECT oi.id, oi.order_id, oi.product_id, oi.quantity, oi.price_at_time, p.name as product_name 
 FROM order_items oi
@@ -432,7 +464,7 @@ func (q *Queries) GetRevenueByDay(ctx context.Context, tenantID uuid.UUID) ([]Ge
 }
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
-SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category FROM tenants WHERE slug = $1 LIMIT 1
+SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment FROM tenants WHERE slug = $1 LIMIT 1
 `
 
 func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, error) {
@@ -448,6 +480,8 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }
@@ -632,7 +666,7 @@ func (q *Queries) ListCategories(ctx context.Context, tenantID uuid.UUID) ([]sql
 }
 
 const listOrdersByTenant = `-- name: ListOrdersByTenant :many
-SELECT o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, u.full_name, u.email, u.street, u.zip_code, u.city
+SELECT o.id, o.tenant_id, o.user_id, o.status, o.total_amount, o.created_at, o.payment_method, o.payrexx_gateway_id, o.payment_status, u.full_name, u.email, u.street, u.zip_code, u.city
 FROM orders o
 JOIN users u ON o.user_id = u.id
 WHERE o.tenant_id = $1 
@@ -640,17 +674,20 @@ ORDER BY o.created_at DESC
 `
 
 type ListOrdersByTenantRow struct {
-	ID          uuid.UUID      `json:"id"`
-	TenantID    uuid.UUID      `json:"tenant_id"`
-	UserID      uuid.UUID      `json:"user_id"`
-	Status      string         `json:"status"`
-	TotalAmount string         `json:"total_amount"`
-	CreatedAt   sql.NullTime   `json:"created_at"`
-	FullName    sql.NullString `json:"full_name"`
-	Email       string         `json:"email"`
-	Street      sql.NullString `json:"street"`
-	ZipCode     sql.NullString `json:"zip_code"`
-	City        sql.NullString `json:"city"`
+	ID               uuid.UUID      `json:"id"`
+	TenantID         uuid.UUID      `json:"tenant_id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	Status           string         `json:"status"`
+	TotalAmount      string         `json:"total_amount"`
+	CreatedAt        sql.NullTime   `json:"created_at"`
+	PaymentMethod    string         `json:"payment_method"`
+	PayrexxGatewayID sql.NullInt32  `json:"payrexx_gateway_id"`
+	PaymentStatus    string         `json:"payment_status"`
+	FullName         sql.NullString `json:"full_name"`
+	Email            string         `json:"email"`
+	Street           sql.NullString `json:"street"`
+	ZipCode          sql.NullString `json:"zip_code"`
+	City             sql.NullString `json:"city"`
 }
 
 func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([]ListOrdersByTenantRow, error) {
@@ -669,6 +706,9 @@ func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([
 			&i.Status,
 			&i.TotalAmount,
 			&i.CreatedAt,
+			&i.PaymentMethod,
+			&i.PayrexxGatewayID,
+			&i.PaymentStatus,
 			&i.FullName,
 			&i.Email,
 			&i.Street,
@@ -689,7 +729,7 @@ func (q *Queries) ListOrdersByTenant(ctx context.Context, tenantID uuid.UUID) ([
 }
 
 const listOrdersByUser = `-- name: ListOrdersByUser :many
-SELECT id, tenant_id, user_id, status, total_amount, created_at FROM orders WHERE user_id = $1 ORDER BY created_at DESC
+SELECT id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status FROM orders WHERE user_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Order, error) {
@@ -708,6 +748,9 @@ func (q *Queries) ListOrdersByUser(ctx context.Context, userID uuid.UUID) ([]Ord
 			&i.Status,
 			&i.TotalAmount,
 			&i.CreatedAt,
+			&i.PaymentMethod,
+			&i.PayrexxGatewayID,
+			&i.PaymentStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -882,7 +925,7 @@ func (q *Queries) ListTenantOwners(ctx context.Context, tenantID uuid.UUID) ([]L
 }
 
 const listTenants = `-- name: ListTenants :many
-SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category FROM tenants 
+SELECT id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment FROM tenants 
 WHERE (name ILIKE '%' || $1 || '%' OR COALESCE(category, '') ILIKE '%' || $1 || '%')
 AND (COALESCE(category, '') = $2 OR $2 = '')
 ORDER BY name
@@ -912,6 +955,8 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 			&i.Description,
 			&i.OwnerID,
 			&i.Category,
+			&i.AllowsOnlinePayment,
+			&i.AllowsCashPayment,
 		); err != nil {
 			return nil, err
 		}
@@ -980,7 +1025,7 @@ func (q *Queries) RemoveTenantOwner(ctx context.Context, arg RemoveTenantOwnerPa
 }
 
 const setTenantOwner = `-- name: SetTenantOwner :one
-UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+UPDATE tenants SET owner_id = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
 `
 
 type SetTenantOwnerParams struct {
@@ -1001,6 +1046,8 @@ func (q *Queries) SetTenantOwner(ctx context.Context, arg SetTenantOwnerParams) 
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }
@@ -1037,8 +1084,61 @@ func (q *Queries) UpdateBlog(ctx context.Context, arg UpdateBlogParams) (Blog, e
 	return i, err
 }
 
+const updateOrderGatewayID = `-- name: UpdateOrderGatewayID :one
+UPDATE orders SET payrexx_gateway_id = $2 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+`
+
+type UpdateOrderGatewayIDParams struct {
+	ID               uuid.UUID     `json:"id"`
+	PayrexxGatewayID sql.NullInt32 `json:"payrexx_gateway_id"`
+}
+
+func (q *Queries) UpdateOrderGatewayID(ctx context.Context, arg UpdateOrderGatewayIDParams) (Order, error) {
+	row := q.queryRow(ctx, q.updateOrderGatewayIDStmt, updateOrderGatewayID, arg.ID, arg.PayrexxGatewayID)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.UserID,
+		&i.Status,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.PaymentMethod,
+		&i.PayrexxGatewayID,
+		&i.PaymentStatus,
+	)
+	return i, err
+}
+
+const updateOrderPaymentStatus = `-- name: UpdateOrderPaymentStatus :one
+UPDATE orders SET status = $2, payment_status = $3 WHERE id = $1 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
+`
+
+type UpdateOrderPaymentStatusParams struct {
+	ID            uuid.UUID `json:"id"`
+	Status        string    `json:"status"`
+	PaymentStatus string    `json:"payment_status"`
+}
+
+func (q *Queries) UpdateOrderPaymentStatus(ctx context.Context, arg UpdateOrderPaymentStatusParams) (Order, error) {
+	row := q.queryRow(ctx, q.updateOrderPaymentStatusStmt, updateOrderPaymentStatus, arg.ID, arg.Status, arg.PaymentStatus)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.UserID,
+		&i.Status,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.PaymentMethod,
+		&i.PayrexxGatewayID,
+		&i.PaymentStatus,
+	)
+	return i, err
+}
+
 const updateOrderStatus = `-- name: UpdateOrderStatus :one
-UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING id, tenant_id, user_id, status, total_amount, created_at
+UPDATE orders SET status = $2 WHERE id = $1 AND tenant_id = $3 RETURNING id, tenant_id, user_id, status, total_amount, created_at, payment_method, payrexx_gateway_id, payment_status
 `
 
 type UpdateOrderStatusParams struct {
@@ -1057,6 +1157,9 @@ func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusPa
 		&i.Status,
 		&i.TotalAmount,
 		&i.CreatedAt,
+		&i.PaymentMethod,
+		&i.PayrexxGatewayID,
+		&i.PaymentStatus,
 	)
 	return i, err
 }
@@ -1135,7 +1238,7 @@ func (q *Queries) UpdateProductStock(ctx context.Context, arg UpdateProductStock
 }
 
 const updateTenant = `-- name: UpdateTenant :one
-UPDATE tenants SET name = $2, slug = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+UPDATE tenants SET name = $2, slug = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
 `
 
 type UpdateTenantParams struct {
@@ -1157,12 +1260,14 @@ func (q *Queries) UpdateTenant(ctx context.Context, arg UpdateTenantParams) (Ten
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }
 
 const updateTenantAppearance = `-- name: UpdateTenantAppearance :one
-UPDATE tenants SET cover_url = $2, description = $3, category = $4 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+UPDATE tenants SET cover_url = $2, description = $3, category = $4 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
 `
 
 type UpdateTenantAppearanceParams struct {
@@ -1190,12 +1295,14 @@ func (q *Queries) UpdateTenantAppearance(ctx context.Context, arg UpdateTenantAp
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }
 
 const updateTenantIcon = `-- name: UpdateTenantIcon :one
-UPDATE tenants SET icon_url = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category
+UPDATE tenants SET icon_url = $2 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
 `
 
 type UpdateTenantIconParams struct {
@@ -1216,6 +1323,37 @@ func (q *Queries) UpdateTenantIcon(ctx context.Context, arg UpdateTenantIconPara
 		&i.Description,
 		&i.OwnerID,
 		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
+	)
+	return i, err
+}
+
+const updateTenantPaymentSettings = `-- name: UpdateTenantPaymentSettings :one
+UPDATE tenants SET allows_online_payment = $2, allows_cash_payment = $3 WHERE id = $1 RETURNING id, name, slug, created_at, icon_url, cover_url, description, owner_id, category, allows_online_payment, allows_cash_payment
+`
+
+type UpdateTenantPaymentSettingsParams struct {
+	ID                  uuid.UUID `json:"id"`
+	AllowsOnlinePayment bool      `json:"allows_online_payment"`
+	AllowsCashPayment   bool      `json:"allows_cash_payment"`
+}
+
+func (q *Queries) UpdateTenantPaymentSettings(ctx context.Context, arg UpdateTenantPaymentSettingsParams) (Tenant, error) {
+	row := q.queryRow(ctx, q.updateTenantPaymentSettingsStmt, updateTenantPaymentSettings, arg.ID, arg.AllowsOnlinePayment, arg.AllowsCashPayment)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.CreatedAt,
+		&i.IconUrl,
+		&i.CoverUrl,
+		&i.Description,
+		&i.OwnerID,
+		&i.Category,
+		&i.AllowsOnlinePayment,
+		&i.AllowsCashPayment,
 	)
 	return i, err
 }

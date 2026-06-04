@@ -94,8 +94,8 @@ RETURNING *;
 DELETE FROM blogs WHERE id = $1 AND tenant_id = $2;
 
 -- name: CreateOrder :one
-INSERT INTO orders (tenant_id, user_id, status, total_amount)
-VALUES ($1, $2, $3, $4)
+INSERT INTO orders (tenant_id, user_id, status, total_amount, payment_method, payrexx_gateway_id, payment_status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: CreateOrderItem :one
@@ -194,3 +194,17 @@ UPDATE users SET full_name = $2, street = $3, zip_code = $4, city = $5 WHERE id 
 
 -- name: ListUsers :many
 SELECT * FROM users ORDER BY created_at DESC;
+
+-- name: UpdateOrderPaymentStatus :one
+UPDATE orders SET status = $2, payment_status = $3 WHERE id = $1 RETURNING *;
+
+-- name: UpdateOrderGatewayID :one
+UPDATE orders SET payrexx_gateway_id = $2 WHERE id = $1 RETURNING *;
+
+-- name: UpdateTenantPaymentSettings :one
+UPDATE tenants SET allows_online_payment = $2, allows_cash_payment = $3 WHERE id = $1 RETURNING *;
+
+-- name: GetOrder :one
+SELECT * FROM orders WHERE id = $1 LIMIT 1;
+
+

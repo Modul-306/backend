@@ -92,7 +92,9 @@ func main() {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	emailService := &api.MockEmailService{}
-	server := api.NewServer(dbQueries, conn, s3Storage, emailService, jwtSecret)
+	payrexxInstance := os.Getenv("PAYREXX_INSTANCE_NAME")
+	payrexxAPISecret := os.Getenv("PAYREXX_API_SECRET")
+	server := api.NewServer(dbQueries, conn, s3Storage, emailService, jwtSecret, payrexxInstance, payrexxAPISecret)
 
 	// Seed default tenant and admin user
 	ctx := context.Background()
