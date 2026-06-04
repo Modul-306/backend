@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -323,14 +324,127 @@ func (s *Server) handleGetOrderDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order, err := s.db.GetOrder(r.Context(), id)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusNotFound, "Order not found")
+		return
+	}
+
+	// Double check status with Payrexx in real-time if pending payment
+	if order.PaymentMethod == "online" && order.PaymentStatus != "paid" && order.Status == "pending_payment" && order.PayrexxGatewayID.Valid {
+		payrexxStatus, err := s.checkPayrexxGatewayStatus(int(order.PayrexxGatewayID.Int32))
+		if err != nil {
+			log.Printf("Failed to check Payrexx gateway status for order %s: %v", order.ID, err)
+		} else {
+			var newStatus string
+			var newPaymentStatus string
+			switch payrexxStatus {
+			case "confirmed":
+				newStatus = "completed"
+				newPaymentStatus = "paid"
+			case "cancelled", "declined", "error":
+				newStatus = "cancelled"
+				newPaymentStatus = "unpaid"
+			}
+
+			if newStatus != "" {
+				// Update order status and payment status in database
+				updatedOrder, dbErr := s.db.UpdateOrderPaymentStatus(r.Context(), db.UpdateOrderPaymentStatusParams{
+					ID:            order.ID,
+					Status:        newStatus,
+					PaymentStatus: newPaymentStatus,
+				})
+				if dbErr == nil {
+					order = updatedOrder
+
+					// Send email asynchronously
+					go func() {
+						u, err := s.db.GetUserByID(context.Background(), order.UserID)
+						if err == nil {
+							if newStatus == "completed" {
+								_ = s.notifications.SendEmail(u.Email, "Order Payment Confirmed", "Your order payment has been successfully processed! Your order status is now completed.")
+							} else if newStatus == "cancelled" {
+								_ = s.notifications.SendEmail(u.Email, "Order Payment Failed", "Your order payment has failed or was cancelled. Your order status is now cancelled.")
+							}
+						}
+					}()
+				} else {
+					log.Printf("Failed to update order status in DB: %v", dbErr)
+				}
+			}
+		}
+	}
+
 	items, err := s.db.GetOrderItems(r.Context(), id)
 	if err != nil {
 		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to get order details")
 		return
 	}
 
+	type orderDetailsResponse struct {
+		Order db.Order              `json:"order"`
+		Items []db.GetOrderItemsRow `json:"items"`
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(orderDetailsResponse{
+		Order: order,
+		Items: items,
+	})
+}
+
+func (s *Server) handlePayOrder(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(UserContextKey).(UserClaims)
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusUnauthorized, "Invalid user session")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	orderID, err := uuid.Parse(idStr)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusBadRequest, "Invalid order ID")
+		return
+	}
+
+	order, err := s.db.GetOrder(r.Context(), orderID)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusNotFound, "Order not found")
+		return
+	}
+
+	if order.UserID != userID {
+		s.errorResponse(w, r, http.StatusForbidden, "You do not own this order")
+		return
+	}
+
+	if order.Status != "pending_payment" || order.PaymentStatus == "paid" {
+		s.errorResponse(w, r, http.StatusBadRequest, "Order is already paid or cannot be paid")
+		return
+	}
+
+	var total float64
+	fmt.Sscanf(order.TotalAmount, "%f", &total)
+
+	gatewayID, payLink, err := s.createPayrexxGateway(order.ID, total)
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to create Payrexx payment gateway: "+err.Error())
+		return
+	}
+
+	// Update order gateway ID in database
+	_, err = s.db.UpdateOrderGatewayID(r.Context(), db.UpdateOrderGatewayIDParams{
+		ID:               order.ID,
+		PayrexxGatewayID: sql.NullInt32{Int32: int32(gatewayID), Valid: true},
+	})
+	if err != nil {
+		s.errorResponse(w, r, http.StatusInternalServerError, "Failed to save payment gateway ID on order")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"redirect_url": payLink})
 }
 
 func (s *Server) handleUpdateOrderStatus(w http.ResponseWriter, r *http.Request) {

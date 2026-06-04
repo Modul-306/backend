@@ -81,6 +81,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/upload", s.handleUpload)
 			r.Get("/orders/my", s.handleListMyOrders)
 			r.Get("/orders/{id}", s.handleGetOrderDetails)
+			r.Post("/orders/{id}/pay", s.handlePayOrder)
 			r.Get("/loyalty", s.handleGetUserLoyalty)
 			
 			r.Group(func(r chi.Router) {
