@@ -160,17 +160,18 @@ func (s *Server) createPayrexxGateway(orderID uuid.UUID, totalAmount float64) (i
 	params.Set("failedRedirectUrl", fmt.Sprintf("%s/shop/failed", frontendURL))
 	params.Set("cancelRedirectUrl", fmt.Sprintf("%s/shop/cart", frontendURL))
 
-	// Sort and encode parameters alphabetically
+	// Sort and encode parameters alphabetically (excluding ApiSignature)
 	encodedParams := params.Encode()
 
-	// Generate signature
+	// Generate signature on those parameters
 	signature := generatePayrexxSignature(encodedParams, s.payrexxAPISecret)
 
-	// Append signature to URL
-	reqURL := fmt.Sprintf("%s&ApiSignature=%s", apiURL, url.QueryEscape(signature))
+	// Add ApiSignature to the POST parameters
+	params.Set("ApiSignature", signature)
+	finalBody := params.Encode()
 
-	// Create POST request
-	req, err := http.NewRequest("POST", reqURL, strings.NewReader(encodedParams))
+	// Create POST request (signature sent in request body as POST parameter)
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(finalBody))
 	if err != nil {
 		return 0, "", err
 	}
